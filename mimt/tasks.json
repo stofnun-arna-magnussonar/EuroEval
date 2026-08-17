@@ -1,0 +1,44 @@
+{
+    "logical_reasoning": {
+        "name": {
+            "is": "Rökleiðsla",
+            "en": "Logical reasoning"
+        },
+        "description": {
+            "is": "Hér má finna próf sem snúa að úrlausn verkefna sem krefjast rökleiðslu. Þetta getur t.a.m. falið í sér að draga réttar ályktanir út frá skrifuðum texta eða að leysa stærðfræðiþrautir, þar sem halda þarf utan um margar breytur í einu.",
+            "en": "Tests that involve solving problems that require logical reasoning. This may include drawing correct conclusions from written text or solving mathematical puzzles that require keeping track of multiple variables at once."
+        },
+        "shortDescription": {
+            "is": "Próf í getu mállíkana til að leysa flóknari verkefni.",
+            "en": "Tests of language models' ability to solve more complex problems."
+        }
+    },
+    "reading_comprehension": {
+        "name": {
+            "is": "Lesskilningur",
+            "en": "Reading comprehension"
+        },
+        "description": {
+            "is": "Hér má finna próf sem eiga að mæla getu mállíkana til þess að finna réttar upplýsingar í samfelldum texta á íslensku. Þetta geta verið lesskilningspróf á borð við þau sem notuð eru í grunnskólum, þar sem líkön eru spurð upp úr textanum og eiga að velja rétt svar af nokkrum mögulegum, eða sérhæfðari verkefni á borð við lyndisgreiningu, þar sem líkönin eiga að skoða texta og meta það hvort t.d. verið sé að lýsa yfir ánægju eða óánægju með það sem skrifað er um.",
+            "en": ""
+        },
+        "shortDescription": {
+            "is": "Próf í getu mállíkana til að finna upplýsingar í íslenskum texta.",
+            "en": "Tests of language models' ability to find information in Icelandic text."
+        }
+    },
+    "linguistic_ability": {
+        "name": {
+            "is": "Málkunnátta",
+            "en": "Grammatical Knowledge"
+        },
+        "description": {
+            "is": "Hér má finna próf sem eiga að mæla færni í íslensku máli, t.d. hvað varðar orðmyndun, beygingar og setningaskipan, sem og getu í því að leiðrétta stafsetningu og málfræði í skrifuðum texta. Líkan sem stendur sig vel í þessum prófum ætti að vera fært um að bera kennsl á málfræðilega réttan og rangan texta og mynda eðlilegan íslenskan texta upp að vissu marki.",
+            "en": "Tests that measure proficiency in the Icelandic language, including morphology, inflection, and syntax, as well as the ability to correct spelling and grammar in written text."
+        },
+        "shortDescription": {
+            "is": "Próf í málfræði- og stafsetningarkunnáttu á íslensku.",
+            "en": "Tests in Icelandic grammar and spelling proficiency."
+        }
+    }
+}

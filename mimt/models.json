@@ -1,0 +1,371 @@
+{
+    "claude-sonnet-4-20250514": {
+        "name": {
+            "is": "claude-sonnet-4-20250514",
+            "en": "claude-sonnet-4-20250514"
+        },
+        "tableName": {
+            "is": "Claude Sonnet 4",
+            "en": "Claude Sonnet 4"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "anthropic",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.706
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.267
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.101
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.0
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.116
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.126
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.729
+            }
+        ]
+    },
+    "grok-3-latest": {
+        "name": {
+            "is": "grok-3-latest",
+            "en": "grok-3-latest"
+        },
+        "tableName": {
+            "is": "Grok 3",
+            "en": "Grok 3"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "xai",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.692
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.902
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.923
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.808
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.828
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.128
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.682
+            }
+        ]
+    },
+    "Llama-3.3-70B-Instruct-Turbo": {
+        "name": {
+            "is": "Llama-3.3-70B-Instruct-Turbo",
+            "en": "Llama-3.3-70B-Instruct-Turbo"
+        },
+        "tableName": {
+            "is": "Llama 3.3",
+            "en": "Llama 3.3"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "meta",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.64
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.892
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.55
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.634
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.103
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.608
+            }
+        ]
+    },
+    "Kimi-K2-Instruct": {
+        "name": {
+            "is": "Kimi-K2-Instruct",
+            "en": "Kimi-K2-Instruct"
+        },
+        "tableName": {
+            "is": "Kimi K2",
+            "en": "Kimi K2"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "moonshotai",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.672
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.911
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.721
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.214
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.698
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.126
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.727
+            }
+        ]
+    },
+    "DeepSeek-R1": {
+        "name": {
+            "is": "DeepSeek-R1",
+            "en": "DeepSeek-R1"
+        },
+        "tableName": {
+            "is": "DeepSeek R1",
+            "en": "DeepSeek R1"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "deepseek",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.0
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.036
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.07
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.004
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.197
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.0
+            }
+        ]
+    },
+    "gpt-4o-2024-08-06": {
+        "name": {
+            "is": "gpt-4o-2024-08-06",
+            "en": "gpt-4o-2024-08-06"
+        },
+        "tableName": {
+            "is": "GPT 4",
+            "en": "GPT 4"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.726
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.92
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.922
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.778
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.808
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.131
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.698
+            }
+        ]
+    },
+    "gpt-5-2025-08-07": {
+        "name": {
+            "is": "gpt-5-2025-08-07",
+            "en": "gpt-5-2025-08-07"
+        },
+        "tableName": {
+            "is": "GPT 5",
+            "en": "GPT 5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "hotcold",
+                "score": 0.71
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.931
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.93
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.918
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.924
+            },
+            {
+                "benchmark": "iceling-is",
+                "score": 0.138
+            },
+            {
+                "benchmark": "iceling-en",
+                "score": 0.916
+            }
+        ]
+    },
+    "gemini-2.5-flash-lite-preview-06-17": {
+        "name": {
+            "is": "gemini-2.5-flash-lite-preview-06-17",
+            "en": "gemini-2.5-flash-lite-preview-06-17"
+        },
+        "tableName": {
+            "is": "Gemini 2.5",
+            "en": "Gemini 2.5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "belebele-is",
+                "score": 0.873
+            },
+            {
+                "benchmark": "belebele-en",
+                "score": 0.887
+            },
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.68
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.698
+            }
+        ]
+    },
+    "deepseek-chat-v3-0324": {
+        "name": {
+            "is": "deepseek-chat-v3-0324",
+            "en": "deepseek-chat-v3-0324"
+        },
+        "tableName": {
+            "is": "DeepSeek Chat",
+            "en": "DeepSeek Chat"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "deepseek",
+        "results": [
+            {
+                "benchmark": "winogrande-en",
+                "score": 0.679
+            }
+        ]
+    }
+}

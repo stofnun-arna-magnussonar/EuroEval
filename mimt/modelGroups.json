@@ -1,0 +1,108 @@
+{
+    "openai": {
+        "name": {
+            "is": "OpenAI",
+            "en": "OpenAI"
+        },
+        "models": [
+            "gpt-5.4",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-oss-120B"
+        ]
+    },
+    "anthropic": {
+        "name": {
+            "is": "Anthropic",
+            "en": "Anthropic"
+        },
+        "models": [
+            "claude-fable-5",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5"
+        ]
+    },
+    "spacexai": {
+        "name": {
+            "is": "SpaceXAI",
+            "en": "SpaceXAI"
+        },
+        "models": [
+            "grok-4.5",
+            "grok-4-1-fast-reasoning",
+            "grok-4-fast-reasoning"
+        ]
+    },
+    "moonshotai": {
+        "name": {
+            "is": "Moonshot AI",
+            "en": "Moonshot AI"
+        },
+        "models": [
+            "Kimi-K3"
+        ]
+    },
+    "zai": {
+        "name": {
+            "is": "Z.ai",
+            "en": "Z.ai"
+        },
+        "models": [
+            "GLM-5.2"
+        ]
+    },
+    "qwen": {
+        "name": {
+            "is": "Qwen",
+            "en": "Qwen"
+        },
+        "models": [
+            "Qwen3.8-2.4T-A95B"
+        ]
+    },
+    "deepseek": {
+        "name": {
+            "is": "DeepSeek",
+            "en": "DeepSeek"
+        },
+        "models": [
+            "DeepSeek-V4-Pro",
+            "DeepSeek-V4-Flash-0731"
+        ]
+    },
+    "google": {
+        "name": {
+            "is": "Google",
+            "en": "Google"
+        },
+        "models": [
+            "gemini-3.1-pro-preview",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemma-4-31B-it",
+            "gemma-3n-E4B-it"
+        ]
+    },
+    "meta": {
+        "name": {
+            "is": "Meta",
+            "en": "Meta"
+        },
+        "models": [
+            "Llama-3.3-70B-Instruct-Turbo"
+        ]
+    },
+    "minimax": {
+        "name": {
+            "is": "MiniMax",
+            "en": "MiniMax"
+        },
+        "models": [
+            "MiniMax-M3"
+        ]
+    }
+}

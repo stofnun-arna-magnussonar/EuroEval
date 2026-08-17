@@ -98,7 +98,7 @@ checkpoint-*
 
 # Result log
 scandeval_benchmark_results.jsonl
-euroeval_benchmark_results.jsonl
+/euroeval_benchmark_results.jsonl
 
 # Leaderboard generation inputs (large, kept off-repo; see src/leaderboards/paths.py)
 results.tar.gz
@@ -175,3 +175,4 @@ data/
 # Slopo code duplication detection
 .slopo/*
 !.slopo/slopo.ignore.txt
+venv
