@@ -368,6 +368,96 @@ You can evaluate this dataset directly as follows:
 euroeval --model <model-id> --dataset ice-linguistic
 ```
 
+### Unofficial: IceLinguistic-is
+
+This is a second build of the same source benchmark, described in
+[this paper](https://aclanthology.org/2025.nodalida-1.5/), differing from `ice-linguistic`
+in three respects.
+
+First, it uses the Icelandic-prompt edition of the benchmark and passes each item's
+prompt through verbatim, rather than extracting the bare sentence and wrapping it in
+EuroEval's generic linguistic-acceptability template. Every item in the source exists in
+two polarities — *"Er eftirfarandi setning málfræðilega **rétt** á íslensku?"* and *"...
+**röng** ...?"* — which the benchmark authors added specifically to control for yes/no
+response bias (paper §3.1). Extracting the sentence collapses the two into duplicate rows
+and discards that control; keeping the prompt makes them distinct items with opposite
+correct answers, so a model that always answers `já` scores an MCC near zero.
+
+Second, splits are assigned per phenomenon group rather than per row. A group holds every
+variant of one phenomenon instance: both members of a minimal pair together with both
+polarities of each. Splitting by row scatters near-identical sentences across train and
+test, leaking test answers into the few-shot pool.
+
+Third, it covers both yes/no methods of the benchmark — sentence grammaticality (532
+items) and compound-noun well-formedness (280 items) — rather than a length-filtered
+subset of the former.
+
+Of the 1,160 items in the source, the 812 with `já`/`nei` answers are used; the remainder
+are free-text methods (fill-in-the-blank, fragment answering, question answering, word
+sense) that cannot be scored as a classification task. We use a 140 / 98 / 574 split for
+training, validation and testing, respectively, with every split balanced between the two
+labels and all 20 phenomenon families represented in the test split.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Er eftirfarandi setning málfræðilega rétt á íslensku?\n\n Aron er hávaxinn hetja. \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+```json
+{
+  "text": "Er eftirfarandi setning málfræðilega röng á íslensku?\n\n Hvaða kennari telur að Guðrún hafi skemmt bílinn? \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+```json
+{
+  "text": "Er eftirfarandi samsett orð á íslensku rétt myndað?\n\n gleraugumheppni \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 12
+- Prefix prompt:
+
+  ```text
+  Eftirfarandi eru spurningar um íslenska málfræði ásamt svörum.
+  ```
+
+- Base prompt template:
+
+  ```text
+  {text}
+  Svar: {label}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  {text}
+  ```
+
+  I.e., the benchmark's own prompt is used directly, with no additional instruction.
+
+- Label mapping:
+  - `já` ➡️ `já`
+  - `nei` ➡️ `nei`
+
+Note that the paper evaluates zero-shot; add `--zero-shot` to reproduce that condition.
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset ice-linguistic-is
+```
+
 ## Reading Comprehension
 
 ### NQiI

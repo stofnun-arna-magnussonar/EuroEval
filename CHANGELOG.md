@@ -9,6 +9,15 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Added the unofficial Icelandic linguistic acceptability dataset `ice-linguistic-is`,
+  a second build of the Icelandic Linguistic Benchmark (Ármannsson et al., 2025). Unlike
+  the existing `ice-linguistic`, it uses the Icelandic-prompt edition and passes each
+  item's prompt through verbatim, preserving the benchmark's inverse-polarity questions
+  as distinct items rather than collapsing them into duplicate rows — the authors added
+  those to control for yes/no response bias. Splits are assigned per phenomenon group so
+  that minimal-pair partners never straddle the train/test boundary, and both yes/no
+  methods of the benchmark are covered (sentence grammaticality and compound-noun
+  well-formedness).
 - Added support for evaluating encoder models on multiple-choice tasks using the native
   `AutoModelForMultipleChoice` head (with `DataCollatorForMultipleChoice`). Encoder
   models are now enabled on knowledge, multiple-choice-reading-comprehension,
