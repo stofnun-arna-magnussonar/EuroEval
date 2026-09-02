@@ -230,6 +230,7 @@ MODEL_RELEASE_DATE_MAPPING = {
     r"(anthropic/)?claude-mythos-preview": "2026-04-07",
     r"(anthropic/)?claude-opus-4-8": "2026-05-28",
     r"(anthropic/)?claude-(?:fable|mythos)-5": "2026-06-09",
+    r"(anthropic/)?claude-fable-5-1": "2026-09-01",
     r"(anthropic/)?claude-sonnet-5": "2026-06-30",
     r"(anthropic/)?claude-opus-5": "2026-07-24",
     # Google
