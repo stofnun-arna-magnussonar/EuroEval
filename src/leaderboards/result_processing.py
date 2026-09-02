@@ -114,7 +114,6 @@ def process_results(
         )
         for record in tqdm(processed_records, desc="Adding missing entries")
     ]
-
     _upload_per_model_files(
         processed_records=processed_records, upload_to_bucket=upload_to_bucket
     )

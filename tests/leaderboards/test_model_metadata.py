@@ -54,6 +54,7 @@ class TestCachePriority:
                     "merge": False,
                     "commercially_licensed": False,
                     "trained_from_scratch": False,
+                    "release_date": "2025-04-29",
                 },
             },
             "generative": True,
@@ -90,6 +91,7 @@ class TestCachePriority:
                     "merge": False,
                     "commercially_licensed": False,
                     "trained_from_scratch": False,
+                    "release_date": "2025-04-29",
                 },
             },
             "generative": True,
@@ -916,3 +918,141 @@ class TestValSuffixMetadataLookup:
         mock_api.model_info.assert_called_once_with(
             repo_id="microsoft/Phi-3-mini-4k-instruct"
         )
+
+
+@patch("leaderboards.model_metadata.get_model_release_date")
+def test_add_missing_entries_caches_missing_release_date(
+    mock_release_date: MagicMock,
+) -> None:
+    """A failed lookup is cached and not repeated for the same model."""
+    mock_release_date.return_value = None
+    records = [
+        {
+            "model_info": {
+                "name": "org/model",
+                "additional_details": {"model_url": "https://hf.co/org/model"},
+            }
+        }
+        for _ in range(2)
+    ]
+    cache = Cache()
+
+    for record in records:
+        _add_missing_entries_with_complete_metadata(record=record, cache=cache)
+
+    mock_release_date.assert_called_once()
+    assert "org/model" in cache.release_date
+    assert cache.release_date["org/model"] is None
+
+
+def _add_missing_entries_with_complete_metadata(record: dict, cache: Cache) -> dict:
+    """Populate unrelated metadata so release-date tests never prompt.
+
+    Returns:
+        The record after adding any missing metadata.
+    """
+    additional = record["model_info"]["additional_details"]
+    additional.update(
+        generative_type="base",
+        merge=False,
+        commercially_licensed=True,
+        open=True,
+        trained_from_scratch=False,
+    )
+    return add_missing_entries(
+        record=record,
+        trained_from_scratch_patterns=TRAINED_FROM_SCRATCH_PATTERNS,
+        cache=cache,
+    )
+
+
+@patch("leaderboards.model_metadata.get_model_release_date")
+def test_add_missing_entries_preserves_existing_release_date(
+    mock_release_date: MagicMock,
+) -> None:
+    """A valid historical release date is never replaced by a lookup."""
+    record = {
+        "model_info": {
+            "name": "org/model",
+            "additional_details": {
+                "model_url": "https://hf.co/org/model",
+                "release_date": "2024-02-03",
+            },
+        }
+    }
+
+    _add_missing_entries_with_complete_metadata(record=record, cache=Cache())
+
+    mock_release_date.assert_not_called()
+
+
+@patch("leaderboards.model_metadata.get_model_release_date")
+def test_add_missing_entries_repairs_malformed_release_date(
+    mock_release_date: MagicMock,
+) -> None:
+    """Malformed historical dates are replaced with provider metadata."""
+    mock_release_date.return_value = "2024-02-03"
+    record = {
+        "model_info": {
+            "name": "org/model",
+            "additional_details": {
+                "model_url": "https://hf.co/org/model",
+                "release_date": "not-a-date",
+            },
+        }
+    }
+
+    _add_missing_entries_with_complete_metadata(record=record, cache=Cache())
+
+    assert record["model_info"]["additional_details"]["release_date"] == "2024-02-03"
+
+
+@patch("leaderboards.model_metadata.get_api_model_release_date")
+def test_add_missing_entries_reuses_api_release_date_for_all_records(
+    mock_release_date: MagicMock,
+) -> None:
+    """Historical API records are enriched without duplicate lookups."""
+    mock_release_date.return_value = "2023-06-13"
+    records = [
+        {
+            "model_info": {
+                "name": "openai/gpt-4-0613",
+                "additional_details": {"model_url": "https://openai.com/gpt-4"},
+            }
+        }
+        for _ in range(2)
+    ]
+
+    cache = Cache()
+    enriched = [
+        _add_missing_entries_with_complete_metadata(record=record, cache=cache)
+        for record in records
+    ]
+
+    assert all(
+        record["model_info"]["additional_details"]["release_date"] == "2023-06-13"
+        for record in enriched
+    )
+    mock_release_date.assert_called_once_with("openai/gpt-4-0613")
+
+
+@patch("leaderboards.model_metadata.get_model_release_date")
+def test_add_missing_entries_uses_first_hf_weights_commit(
+    mock_release_date: MagicMock,
+) -> None:
+    """Historical Hugging Face records use the shared weights-history lookup."""
+    mock_release_date.return_value = "2024-02-03"
+    record = {
+        "model_info": {
+            "name": "org/model",
+            "additional_details": {"model_url": "https://hf.co/org/model"},
+        }
+    }
+
+    cache = Cache()
+    cache.release_date["org/model"] = "also-not-a-date"
+
+    _add_missing_entries_with_complete_metadata(record=record, cache=cache)
+
+    assert record["model_info"]["additional_details"]["release_date"] == "2024-02-03"
+    mock_release_date.assert_called_once()

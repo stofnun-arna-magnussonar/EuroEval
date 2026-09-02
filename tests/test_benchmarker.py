@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from shutil import rmtree
 from typing import Never
+from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -352,6 +353,43 @@ def test_benchmark_openai(
     )
     assert isinstance(benchmark_result, list)
     assert all(isinstance(result, BenchmarkResult) for result in benchmark_result)
+
+
+def test_benchmark_result_includes_model_release_date(
+    monkeypatch: pytest.MonkeyPatch,
+    model_config: ModelConfig,
+    dataset_config: DatasetConfig,
+    benchmark_config: BenchmarkConfig,
+) -> None:
+    """A completed evaluation copies model release metadata into its result."""
+    dated_config = replace(model_config, release_date="2024-02-03")
+    model = MagicMock()
+    model.num_params = 100
+    model.model_max_length = 512
+    model.vocab_size = 32_000
+    model.generative_type = None
+    model.prepare_datasets.return_value = MagicMock()
+
+    monkeypatch.setattr("euroeval.benchmarker.enforce_reproducibility", MagicMock())
+    monkeypatch.setattr("euroeval.benchmarker.initial_logging", MagicMock())
+    monkeypatch.setattr("euroeval.benchmarker.load_data", MagicMock())
+    monkeypatch.setattr(
+        "euroeval.benchmarker.load_model", MagicMock(return_value=model)
+    )
+    monkeypatch.setattr("euroeval.benchmarker.finetune", MagicMock())
+    monkeypatch.setattr("euroeval.benchmarker.log_scores", MagicMock(return_value={}))
+
+    result = Benchmarker(progress_bar=False, save_results=False)._benchmark_single(
+        model=model,
+        model_config=dated_config,
+        dataset_config=dataset_config,
+        benchmark_config=benchmark_config,
+        num_finished_benchmarks=0,
+        num_total_benchmarks=1,
+    )
+
+    assert isinstance(result, BenchmarkResult)
+    assert result.release_date == "2024-02-03"
 
 
 def test_benchmark_results_is_a_list(benchmarker: Benchmarker) -> None:

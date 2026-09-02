@@ -2,6 +2,7 @@
 
 import asyncio
 import collections.abc as c
+import datetime
 import json
 import logging
 import os
@@ -166,6 +167,99 @@ NUM_PARAMS_MAPPING = {
 }
 
 
+# Release dates for API aliases which do not carry a dated version in their ID.
+# Dated model IDs are handled generically by `get_api_model_release_date` below.
+# Sources are the providers' model launch posts and model changelogs:
+# https://platform.openai.com/docs/models, https://docs.anthropic.com/en/docs/about-claude/models,
+# https://ai.google.dev/gemini-api/docs/models, and https://docs.x.ai/docs/models.
+MODEL_RELEASE_DATE_MAPPING = {
+    # OpenAI
+    r"(openai/)?gpt-3\.5-turbo": "2023-03-01",
+    r"(openai/)?gpt-3\.5-turbo-instruct": "2023-09-18",
+    r"(openai/)?gpt-3\.5-turbo-0301": "2023-03-01",
+    r"(openai/)?gpt-3\.5-turbo-0613": "2023-06-13",
+    r"(openai/)?gpt-3\.5-turbo-1106": "2023-11-06",
+    r"(openai/)?gpt-3\.5-turbo-0125": "2024-01-25",
+    r"(openai/)?gpt-3\.5-turbo-instruct-0914": "2023-09-14",
+    r"(openai/)?gpt-4": "2023-03-14",
+    r"(openai/)?gpt-4(?:-32k)?-0314": "2023-03-14",
+    r"(openai/)?gpt-4(?:-32k)?-0613": "2023-06-13",
+    r"(openai/)?gpt-4-turbo": "2024-04-09",
+    r"(openai/)?gpt-4o": "2024-05-13",
+    r"(openai/)?gpt-4o-mini": "2024-07-18",
+    r"(openai/)?o1-(?:mini|preview)": "2024-09-12",
+    r"(openai/)?o1": "2024-12-17",
+    r"(openai/)?o1-pro": "2025-04-14",
+    r"(openai/)?o3-mini": "2025-01-31",
+    r"(openai/)?gpt-4\.1": "2025-04-14",
+    r"(openai/)?gpt-4\.1-mini": "2025-04-14",
+    r"(openai/)?gpt-4\.1-nano": "2025-04-14",
+    r"(openai/)?o3": "2025-04-16",
+    r"(openai/)?o4-mini": "2025-04-16",
+    r"(openai/)?gpt-5": "2025-08-07",
+    r"(openai/)?gpt-5-(?:chat-latest|pro)": "2025-08-07",
+    r"(openai/)?gpt-5-mini": "2025-08-07",
+    r"(openai/)?gpt-5-nano": "2025-08-07",
+    r"(openai/)?gpt-5\.1": "2025-11-13",
+    r"(openai/)?gpt-5\.1-chat-latest": "2025-11-13",
+    r"(openai/)?gpt-5\.2": "2025-12-11",
+    r"(openai/)?gpt-5\.2-(?:chat-latest|pro)": "2025-12-11",
+    r"(openai/)?gpt-5\.3-codex": "2026-02-05",
+    r"(openai/)?gpt-5\.3-chat-latest": "2026-03-03",
+    r"(openai/)?gpt-5\.4": "2026-03-05",
+    r"(openai/)?gpt-5\.4-pro": "2026-03-05",
+    r"(openai/)?gpt-5\.4-(?:mini|nano)": "2026-03-17",
+    r"(openai/)?gpt-5\.5": "2026-04-23",
+    r"(openai/)?gpt-5\.5-pro": "2026-04-23",
+    r"(openai/)?gpt-5\.6(?:-(?:sol|terra|luna))?": "2026-07-09",
+    # Anthropic
+    r"(anthropic/)?claude-3-opus": "2024-03-04",
+    r"(anthropic/)?claude-3-sonnet": "2024-03-04",
+    r"(anthropic/)?claude-3-haiku": "2024-03-13",
+    r"(anthropic/)?claude-3-5-sonnet": "2024-06-20",
+    r"(anthropic/)?claude-3-5-haiku": "2024-11-04",
+    r"(anthropic/)?claude-3-7-sonnet": "2025-02-24",
+    r"(anthropic/)?claude-(?:opus|sonnet)-4": "2025-05-22",
+    r"(anthropic/)?claude-opus-4-1": "2025-08-05",
+    r"(anthropic/)?claude-sonnet-4-5": "2025-09-29",
+    r"(anthropic/)?claude-haiku-4-5": "2025-10-15",
+    r"(anthropic/)?claude-opus-4-5": "2025-11-24",
+    r"(anthropic/)?claude-opus-4-6": "2026-02-05",
+    r"(anthropic/)?claude-sonnet-4-6": "2026-02-17",
+    r"(anthropic/)?claude-opus-4-7": "2026-04-16",
+    r"(anthropic/)?claude-mythos-preview": "2026-04-07",
+    r"(anthropic/)?claude-opus-4-8": "2026-05-28",
+    r"(anthropic/)?claude-(?:fable|mythos)-5": "2026-06-09",
+    r"(anthropic/)?claude-sonnet-5": "2026-06-30",
+    r"(anthropic/)?claude-opus-5": "2026-07-24",
+    # Google
+    r"(gemini/)?gemini-1\.5-pro.*": "2024-02-15",
+    r"(gemini/)?gemini-1\.5-flash.*": "2024-05-14",
+    r"(gemini/)?gemini-2\.0-flash.*": "2024-12-11",
+    r"(gemini/)?gemini-2\.5-pro.*": "2025-03-25",
+    r"(gemini/)?gemini-2\.5-flash.*": "2025-04-17",
+    r"(gemini/)?gemini-3-pro.*": "2025-11-18",
+    r"(gemini/)?gemini-3-flash.*": "2025-12-17",
+    r"(gemini/)?gemini-3\.1-pro.*": "2026-02-19",
+    r"(gemini/)?gemini-3\.1-flash-lite.*": "2026-03-03",
+    r"(gemini/)?gemini-3\.5-flash$": "2026-05-19",
+    r"(gemini/)?gemini-3\.5-flash-lite$": "2026-07-21",
+    r"(gemini/)?gemini-3\.6-flash$": "2026-07-21",
+    r"(gemini/)?gemini-3\.7-flash$": "2026-08-13",
+    # xAI
+    r"(xai/)?grok-1": "2023-11-04",
+    r"(xai/)?grok-1\.5": "2024-03-28",
+    r"(xai/)?grok-2": "2024-08-13",
+    r"(xai/)?grok-3(?:-beta)?": "2025-02-19",
+    r"(xai/)?grok-3-mini.*": "2025-04-09",
+    r"(xai/)?grok-4": "2025-07-09",
+    r"(xai/)?grok-4-fast.*": "2025-09-19",
+    r"(xai/)?grok-4\.1.*": "2025-11-17",
+    r"(xai/)?grok-4\.20.*": "2026-03-10",
+    r"(xai/)?grok-4\.5.*": "2026-07-08",
+    r"(xai/)?grok-4\.6.*": "2026-08-12",
+}
+
 REASONING_MODELS = [
     r"(openai/)?gpt-5.4-.*",
     r"(openai/)?o[1-9](-mini|-preview)?(-[0-9]{4}-[0-9]{2}-[0-9]{2})?",
@@ -186,6 +280,7 @@ BASE_DECODER_MODELS = [
 ]
 
 CUSTOM_INFERENCE_API_PREFIXES = [
+    "huggingface/",
     "hosted_vllm/",
     "vllm/",
     "ollama/",
@@ -1032,9 +1127,15 @@ class LiteLLMModel(BenchmarkModule):
             return generation_kwargs, 0
 
         # Thinking disabled required
+        thinking_disabled_messages = [
+            "thinking.type: field required",
+            "thinking.adaptive.budget_tokens: extra inputs are not permitted",
+        ]
+        thinking = generation_kwargs.get("thinking")
         if (
-            "thinking.type: field required" in error_msg
-            and self.generative_type != GenerativeType.REASONING
+            any(message in error_msg for message in thinking_disabled_messages)
+            and isinstance(thinking, dict)
+            and thinking.get("budget_tokens") == 0
         ):
             log_once(
                 f"The model {model_id!r} requires the `thinking.type` field to be "
@@ -1528,6 +1629,7 @@ class LiteLLMModel(BenchmarkModule):
                 cache_dir=benchmark_config.cache_dir, model_id=model_id
             ),
             adapter_base_model_id=None,
+            release_date=get_api_model_release_date(model_id_components.model_id),
         )
 
     @cached_property
@@ -1966,6 +2068,31 @@ def clean_model_id(model_id: str, benchmark_config: BenchmarkConfig) -> str:
         new_model_id = "openai/openai/" + re.sub(r"(openai/)*", "", new_model_id)
 
     return new_model_id
+
+
+def get_api_model_release_date(model_id: str) -> str | None:
+    """Get an API model release date from its version or manual metadata.
+
+    Args:
+        model_id:
+            The LiteLLM model identifier.
+
+    Returns:
+        The ISO-formatted release date, or None if no date is known.
+    """
+    # Explicit annotations are authoritative, including corrections to a date
+    # embedded in an upstream model identifier.
+    for pattern, release_date in MODEL_RELEASE_DATE_MAPPING.items():
+        if re.fullmatch(pattern=pattern, string=model_id) is not None:
+            return release_date
+
+    date_match = re.search(r"(?<!\d)(\d{4})-?(\d{2})-?(\d{2})(?!\d)", model_id)
+    if date_match is not None:
+        try:
+            return datetime.date(*map(int, date_match.groups())).isoformat()
+        except ValueError:
+            pass
+    return None
 
 
 def set_up_benchmark_config_for_model(

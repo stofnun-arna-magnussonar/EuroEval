@@ -176,3 +176,6 @@ data/
 .slopo/*
 !.slopo/slopo.ignore.txt
 venv
+
+# Backups
+*.bak

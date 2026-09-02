@@ -2,8 +2,9 @@
 
 Centralises every fixed value used by the leaderboard pipeline so the
 constants live in one place rather than being scattered across the modules
-that happen to use them. This module imports only from the standard library
-and ``euroeval``; the rest of the package imports from here.
+that happen to use them. This module imports only from the standard library,
+``euroeval``, and ``leaderboards.enums``; the rest of the package imports
+from here.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from euroeval.languages import (
     ITALIAN,
     LATVIAN,
     LITHUANIAN,
+    LUXEMBOURGISH,
     NORWEGIAN,
     POLISH,
     PORTUGUESE,
@@ -46,6 +48,8 @@ from euroeval.languages import (
     SWEDISH,
     UKRAINIAN,
 )
+
+from .enums import LeaderboardCategory
 
 # ---------------------------------------------------------------------------
 # Permissive licences
@@ -181,6 +185,7 @@ BACKUP_ARCHIVE_ROOT = "results"
 # Tasks displayed on every EuroEval leaderboard, in column order.
 LEADERBOARD_TASKS: list[str] = [
     "sentiment-classification",
+    "classification",
     "named-entity-recognition",
     "linguistic-acceptability",
     "reading-comprehension",
@@ -194,12 +199,23 @@ LEADERBOARD_TASKS: list[str] = [
     "common-sense-reasoning",
     "simplification",
     "european-values",
+    "instruction-following",
+    "tool-calling",
+    "logical-reasoning",
+    "multiple-choice-stereotype-bias",
 ]
 
-# The two leaderboard categories that every model is ranked within. The
-# "generative" variant scores all tasks; "all_models" only scores NLU tasks so
-# non-generative models can compete.
-LEADERBOARD_CATEGORIES: tuple[str, str] = ("generative", "all_models")
+# The three leaderboard categories that every model is ranked within. The
+# "chat" variant scores every task and only ranks instruction-tuned/
+# reasoning models; "generative" scores all tasks except the instruct-
+# exclusive ones; "all_models" only scores NLU tasks so non-generative models
+# can compete.
+LEADERBOARD_CATEGORIES: tuple[LeaderboardCategory, ...] = (
+    LeaderboardCategory.CHAT,
+    LeaderboardCategory.GENERATIVE,
+    LeaderboardCategory.ALL_MODELS,
+)
+MINIMUM_NUMBER_OF_RANKED_ENTRIES: int = 100
 
 # TaskGroup -> "nlu"/"nlg". The "all_models" leaderboard variant only
 # scores NLU tasks so non-generative models can compete.
@@ -404,7 +420,7 @@ _SLAVIC = (
     "Slavic languages (Belarusian, Bulgarian, Bosnian, Croatian, Czech, Polish,"
     " Serbian, Slovak, Slovenian, Ukrainian)"
 )
-_WGERMANIC = "West Germanic languages (Dutch, English, German)"
+_WGERMANIC = "West Germanic languages (Dutch, English, German, Luxembourgish)"
 
 LANGUAGE_GROUP_CODES: dict[str, list[str]] = {
     _BALTIC: [LATVIAN.code, LITHUANIAN.code],
@@ -430,7 +446,7 @@ LANGUAGE_GROUP_CODES: dict[str, list[str]] = {
         SLOVENE.code,
         UKRAINIAN.code,
     ],
-    _WGERMANIC: [DUTCH.code, ENGLISH.code, GERMAN.code],
+    _WGERMANIC: [DUTCH.code, ENGLISH.code, GERMAN.code, LUXEMBOURGISH.code],
     "Albanian": [ALBANIAN.code],
     "Greek": [GREEK.code],
     "Hungarian": [HUNGARIAN.code],

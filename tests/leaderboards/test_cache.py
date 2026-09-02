@@ -89,6 +89,18 @@ class TestCacheFromResultsDir:
         assert cache.trained_from_scratch.get("test/model") is False
         assert cache.model_url.get("test/model") == "https://example.com/model"
 
+    def test_preserves_release_date(self, tmp_path: Path) -> None:
+        """Release dates are reused instead of repeatedly querying providers."""
+        model_dir = tmp_path / "test_model"
+        model_dir.mkdir()
+        record = _make_eee_record(model_id="test/model", model_name="test/model")
+        record["model_info"]["additional_details"]["release_date"] = "2024-02-03"
+        (model_dir / "ds__test__zeroshot.json").write_text(json.dumps(record))
+
+        cache = Cache.from_results_dir(results_dir=tmp_path)
+
+        assert cache.release_date["test/model"] == "2024-02-03"
+
     def test_raises_on_nonexistent_directory(self) -> None:
         """Should raise FileNotFoundError for nonexistent directory."""
         with pytest.raises(FileNotFoundError, match="Results directory"):

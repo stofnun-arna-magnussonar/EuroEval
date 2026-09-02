@@ -85,6 +85,45 @@ LTZGLUE_TC_CONFIG = DatasetConfig(
     "Äntwert nëmme mat engem vun dësen Etiketten: {labels_str}.",
 )
 
+MULTI_IFEVAL_LB_CONFIG = DatasetConfig(
+    name="multi-ifeval-lb",
+    pretty_name="MultiIFEval-lb",
+    source="EuroEval/multi-ifeval-lb",
+    task=INSTRUCTION_FOLLOWING,
+    languages=[LUXEMBOURGISH],
+    train_split=None,
+    val_split=None,
+)
+
+RAGTRUTH_LB_CONFIG = DatasetConfig(
+    name="ragtruth-lb",
+    pretty_name="RAGTruth-lb",
+    source="EuroEval/ragtruth-translated-hallucinations-lb-mini",
+    task=HALLU,
+    languages=[LUXEMBOURGISH],
+    train_split=None,
+)
+
+
+# Unofficial datasets ###
+
+LTZGLUE_LA_MULTI_CONFIG = DatasetConfig(
+    name="ltzglue-la-multi",
+    pretty_name="ltzGLUE-LA (Multi-class)",
+    source="EuroEval/ltzglue-la-multi-mini",
+    task=LA,
+    languages=[LUXEMBOURGISH],
+    labels=["correct", "word_order", "agreement", "morphology", "other"],
+    prompt_prefix="Folgend sinn Sätz. Bestëmmt ob se grammatesch korrekt "
+    "sinn, oder identifizéiert de Feeler Typ.",
+    prompt_template="Saz: {text}\nÄntwert: {label}",
+    instruction_prompt="Saz: {text}\n\nBestëmmt ob de Saz grammatesch korrekt ass "
+    "(äntwert 'correct'), oder identifizéiert de Feeler Typ: 'word_order' (falsch "
+    "Wuert-Reiefolleg), 'agreement' (Subject-Verb oder Determiner-Noun Stëmmung net "
+    "korrekt), 'morphology' (falsch Wortform), oder 'other'. Äntwert nëmme mat engem "
+    "vun dësen Etiketten: {labels_str}.",
+    unofficial=True,
+)
 LTZGLUE_ID_CONFIG = DatasetConfig(
     name="ltzglue-id",
     pretty_name="ltzGLUE-ID",
@@ -111,45 +150,5 @@ LTZGLUE_ID_CONFIG = DatasetConfig(
     prompt_template="Ufruff: {text}\nIntentioun: {label}",
     instruction_prompt="Ufruff: {text}\n\nIdentifizéiert d'Intentioun vum Benotzer. "
     "Äntwert nëmme mat engem vun dësen Etiketten: {labels_str}.",
-)
-
-MULTI_IFEVAL_LB_CONFIG = DatasetConfig(
-    name="multi-ifeval-lb",
-    pretty_name="MultiIFEval-lb",
-    source="EuroEval/multi-ifeval-lb",
-    task=INSTRUCTION_FOLLOWING,
-    languages=[LUXEMBOURGISH],
-    train_split=None,
-    val_split=None,
-)
-
-
-# Unofficial datasets ###
-
-LTZGLUE_LA_MULTI_CONFIG = DatasetConfig(
-    name="ltzglue-la-multi",
-    pretty_name="ltzGLUE-LA (Multi-class)",
-    source="EuroEval/ltzglue-la-multi-mini",
-    task=LA,
-    languages=[LUXEMBOURGISH],
-    labels=["correct", "word_order", "agreement", "morphology", "other"],
-    prompt_prefix="Folgend sinn Sätz. Bestëmmt ob se grammatesch korrekt "
-    "sinn, oder identifizéiert de Feeler Typ.",
-    prompt_template="Saz: {text}\nÄntwert: {label}",
-    instruction_prompt="Saz: {text}\n\nBestëmmt ob de Saz grammatesch korrekt ass "
-    "(äntwert 'correct'), oder identifizéiert de Feeler Typ: 'word_order' (falsch "
-    "Wuert-Reiefolleg), 'agreement' (Subject-Verb oder Determiner-Noun Stëmmung net "
-    "korrekt), 'morphology' (falsch Wortform), oder 'other'. Äntwert nëmme mat engem "
-    "vun dësen Etiketten: {labels_str}.",
-    unofficial=True,
-)
-
-RAGTRUTH_LB_CONFIG = DatasetConfig(
-    name="ragtruth-lb",
-    pretty_name="RAGTruth-lb",
-    source="EuroEval/ragtruth-translated-hallucinations-lb-mini",
-    task=HALLU,
-    languages=[LUXEMBOURGISH],
-    train_split=None,
     unofficial=True,
 )

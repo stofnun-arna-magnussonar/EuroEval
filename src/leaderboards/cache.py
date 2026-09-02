@@ -36,6 +36,8 @@ class Cache:
             A mapping from model IDs to whether they were trained from scratch.
         model_url:
             A mapping from model IDs to their model URL.
+        release_date:
+            A mapping from model IDs to their ISO-formatted release date.
     """
 
     generative_type: dict[str, str | None] = field(default_factory=dict)
@@ -44,6 +46,7 @@ class Cache:
     open: dict[str, bool] = field(default_factory=dict)
     trained_from_scratch: dict[str, bool] = field(default_factory=dict)
     model_url: dict[str, str | None] = field(default_factory=dict)
+    release_date: dict[str, str | None] = field(default_factory=dict)
 
     @classmethod
     def from_results_dir(cls, results_dir: Path) -> "Cache":
@@ -116,6 +119,8 @@ class Cache:
                 ]
             if "model_url" in additional and additional["model_url"] is not None:
                 cache.model_url[model_id] = additional["model_url"]
+            if "release_date" in additional:
+                cache.release_date[model_id] = additional["release_date"]
 
         return cache
 

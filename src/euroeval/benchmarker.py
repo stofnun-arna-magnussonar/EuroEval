@@ -524,7 +524,12 @@ class Benchmarker:
             self._check_adapter_requirements(model_config, benchmark_config)
 
             loaded_model: "BenchmarkModule | None" = None
+            params_to_revert = {}
             for dataset_config in model_mapping[model_config]:
+                # Revert config changes
+                for param, value in params_to_revert.items():
+                    setattr(benchmark_config, param, value)
+
                 params_to_revert = self._update_benchmark_config_for_dataset(
                     dataset_config, benchmark_config
                 )
@@ -591,12 +596,13 @@ class Benchmarker:
                         current_results=current_results,
                     )
                 )
+
                 if should_break:
                     break
 
-                # Revert config changes
-                for param, value in params_to_revert.items():
-                    setattr(benchmark_config, param, value)
+            # Revert config changes
+            for param, value in params_to_revert.items():
+                setattr(benchmark_config, param, value)
 
             del loaded_model
             if benchmark_config.clear_model_cache:
@@ -754,6 +760,7 @@ class Benchmarker:
                         else not benchmark_config.evaluate_test_split
                     ),
                     use_bits_per_character=benchmark_config.use_bits_per_character,
+                    release_date=model_config.release_date,
                     vllm_version=(
                         get_package_version("vllm")
                         if model_config.inference_backend == InferenceBackend.VLLM

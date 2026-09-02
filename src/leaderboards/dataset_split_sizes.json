@@ -54,15 +54,30 @@
     "train": 128,
     "val": 64
   },
+  "EuroEval/belacola-mini": {
+    "test": 300,
+    "train": 1024,
+    "val": 256
+  },
   "EuroEval/belebele-da-mini": {
     "test": 580,
     "train": 256,
     "val": 64
   },
+  "EuroEval/berte-wd-mini": {
+    "test": 360,
+    "train": 1024,
+    "val": 256
+  },
   "EuroEval/besls": {
     "test": 1616,
     "train": 256,
     "val": 128
+  },
+  "EuroEval/bewic-mini": {
+    "test": 400,
+    "train": 1024,
+    "val": 256
   },
   "EuroEval/bfcl-v2": {
     "test": 2001,
@@ -680,6 +695,15 @@
     "train": 64,
     "val": 32
   },
+  "EuroEval/ltzglue-hc-mini": {
+    "test": 2048,
+    "train": 1024,
+    "val": 256
+  },
+  "EuroEval/ltzglue-id-mini": {
+    "test": 66,
+    "val": 53
+  },
   "EuroEval/ltzglue-la-mini": {
     "test": 2048,
     "train": 1024,
@@ -697,6 +721,11 @@
   },
   "EuroEval/ltzglue-sa-mini": {
     "test": 926,
+    "train": 1024,
+    "val": 256
+  },
+  "EuroEval/ltzglue-tc-mini": {
+    "test": 1245,
     "train": 1024,
     "val": 256
   },
@@ -833,6 +862,84 @@
     "test": 2048,
     "train": 1024,
     "val": 256
+  },
+  "EuroEval/multi-ifeval-be": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-bg": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-bs": {
+    "test": 477
+  },
+  "EuroEval/multi-ifeval-cs": {
+    "test": 523
+  },
+  "EuroEval/multi-ifeval-de": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-fi": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-fo": {
+    "test": 477
+  },
+  "EuroEval/multi-ifeval-hr": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-hu": {
+    "test": 475
+  },
+  "EuroEval/multi-ifeval-is": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-it": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-lb": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-lt": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-lv": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-nl": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-nn": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-no": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-pl": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-pt": {
+    "test": 523
+  },
+  "EuroEval/multi-ifeval-ro": {
+    "test": 477
+  },
+  "EuroEval/multi-ifeval-sk": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-sl": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-sq": {
+    "test": 478
+  },
+  "EuroEval/multi-ifeval-sr": {
+    "test": 476
+  },
+  "EuroEval/multi-ifeval-sv": {
+    "test": 524
+  },
+  "EuroEval/multi-ifeval-uk": {
+    "test": 476
   },
   "EuroEval/multi-wiki-qa-be-mini": {
     "test": 2048,
@@ -1036,6 +1143,11 @@
   },
   "EuroEval/publico-mini": {
     "test": 2048,
+    "train": 1024,
+    "val": 256
+  },
+  "EuroEval/reviews3-mini": {
+    "test": 1042,
     "train": 1024,
     "val": 256
   },
@@ -1263,6 +1375,21 @@
     "train": 1024,
     "val": 256
   },
+  "EuroEval/sk-quad-mini": {
+    "test": 2048,
+    "train": 1024,
+    "val": 256
+  },
+  "EuroEval/sklep-nli-mini": {
+    "test": 2048,
+    "train": 1024,
+    "val": 256
+  },
+  "EuroEval/sklep-rte-mini": {
+    "test": 1660,
+    "train": 1024,
+    "val": 256
+  },
   "EuroEval/skolprov": {
     "test": 410,
     "train": 32,
@@ -1403,6 +1530,11 @@
     "train": 1024,
     "val": 256
   },
+  "EuroEval/wikigold-sk-mini": {
+    "test": 1340,
+    "train": 1024,
+    "val": 256
+  },
   "EuroEval/winogrande-bg": {
     "test": 1085,
     "train": 47,
@@ -1527,6 +1659,51 @@
     "test": 2048,
     "train": 1024,
     "val": 256
+  },
+  "EuroEval/zebra-puzzles-easy-da": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-de": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-en": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-fo": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-is": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-nb": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-nl": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-nn": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
+  },
+  "EuroEval/zebra-puzzles-easy-sv": {
+    "test": 1024,
+    "train": 128,
+    "val": 128
   },
   "giannor/dala": {
     "full_train": 5352,

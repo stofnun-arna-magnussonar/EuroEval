@@ -9,15 +9,46 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Added the unofficial Icelandic linguistic acceptability dataset `ice-linguistic-is`,
-  a second build of the Icelandic Linguistic Benchmark (Ármannsson et al., 2025). Unlike
-  the existing `ice-linguistic`, it uses the Icelandic-prompt edition and passes each
-  item's prompt through verbatim, preserving the benchmark's inverse-polarity questions
-  as distinct items rather than collapsing them into duplicate rows — the authors added
-  those to control for yes/no response bias. Splits are assigned per phenomenon group so
-  that minimal-pair partners never straddle the train/test boundary, and both yes/no
-  methods of the benchmark are covered (sentence grammaticality and compound-noun
-  well-formedness).
+- Added model release dates to benchmark result metadata for Hugging Face Hub and API
+  models.
+- Added the unofficial Belarusian Word-in-Context dataset `bewic`, based on the BeWiC
+  dataset from BelarusianGLUE.
+- Added the unofficial Belarusian linguistic acceptability dataset `belacola`, based on
+  the BelaCoLA dataset from BelarusianGLUE.
+- Added five unofficial Slovak datasets derived from SKLEP: SKLEP NLI, SKLEP RTE,
+  SK-QuAD, WikiGoldSK and Reviews3.
+- Added the unofficial Belarusian BeRTE-WD binary natural language inference dataset.
+
+### Changed
+
+- Swapped official dataset for Belarusian: `scala-be` → `belacola`.
+- Upgraded the vLLM dependency to version 0.27.1 or newer.
+- Promoted the unofficial dataset `berte-wd` to official.
+
+### Fixed
+
+- If errors occured during evaluations that required zero-shot or test-set splits, then
+  subsequent evaluations would also require that rather than reverting to the default
+  few-shot and validation splits. This has been fixed.
+- Fixed leaderboard deduplication treating malformed model release dates as valid
+  metadata.
+- Fixed Hugging Face Router model IDs being rewritten with an unwanted `openai/` prefix
+  when using a custom API base.
+- Fixed an infinite loop in token-classification few-shot example selection when the
+  training split runs out of entity-bearing examples before `num_few_shots` is reached,
+  including when the labels contain case variants of the same entity (e.g. `b-per` and
+  `B-PER`).
+- Fixed `#no-thinking` LiteLLM evaluations when providers reject a zero thinking budget
+  and require an explicit `thinking.type` of `disabled`.
+- The logical-reasoning task is now restricted to instruction-tuned and
+  reasoning models, excluding base models.
+
+## [v18.0.0] - 2026-08-14
+
+### Added
+
+>>>>>>> main
+
 - Added support for evaluating encoder models on multiple-choice tasks using the native
   `AutoModelForMultipleChoice` head (with `DataCollatorForMultipleChoice`). Encoder
   models are now enabled on knowledge, multiple-choice-reading-comprehension,
@@ -115,6 +146,16 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fixed `_load_model_from_pretrained` final error message for `KeyError`/`RuntimeError`
+  after retry exhaustion. The raised `InvalidModel` now includes the model ID and
+  exception repr (e.g. `The model 'EuroBERT/EuroBERT-210m' could not be loaded. The
+  error was KeyError('default').`), making it consistent with the `OSError`/`ValueError`
+  handling branch.
+- Fixed `TypeError` in `setup_model_for_question_answering` when expanding token type
+  embeddings from shape (1, ...) to (2, ...) for models like `fresh-xlm-roberta-base`
+  that only have a single token type embedding. The bug was caused by passing `tensor=`
+  as a keyword argument to `torch.rand_like`, which expects `input` as its first
+  positional argument.
 - Fixed loading of Mixture-of-Experts models whose expert intermediate size is not a
   multiple of 128 after being sharded across multiple GPUs (e.g.
   `JetBrains/Mellum2-12B-A2.5B-Base` on Blackwell GPUs), which previously crashed vLLM

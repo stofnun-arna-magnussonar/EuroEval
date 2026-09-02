@@ -263,6 +263,34 @@ A huge thank you to all the contributors who have helped make this project a suc
         alt="Contributor avatar for Biorrith"
     />
 </a>
+<a href="https://github.com/FrejaThoresen">
+    <img
+        src="https://avatars.githubusercontent.com/u/13599833"
+        width=50
+        alt="Contributor avatar for FrejaThoresen"
+    />
+</a>
+<a href="https://github.com/rlrs">
+    <img
+        src="https://avatars.githubusercontent.com/u/7533072"
+        width=50
+        alt="Contributor avatar for rlrs"
+    />
+</a>
+<a href="https://github.com/jaideeppyne">
+    <img
+        src="https://avatars.githubusercontent.com/u/25899506"
+        width=50
+        alt="Contributor avatar for jaideeppyne"
+    />
+</a>
+<a href="https://github.com/milos-plavsic">
+    <img
+        src="https://avatars.githubusercontent.com/u/225993441"
+        width=50
+        alt="Contributor avatar for milos-plavsic"
+    />
+</a>
 
 ### Contribute to EuroEval
 

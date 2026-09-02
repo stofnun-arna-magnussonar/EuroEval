@@ -461,6 +461,7 @@ def _build_model_config_helper(
             cache_dir=benchmark_config.cache_dir, model_id=model_id
         ),
         adapter_base_model_id=adapter_base_model_id,
+        release_date=model_info.release_date,
         generation_config=generation_config,
     )
 

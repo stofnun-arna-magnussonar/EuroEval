@@ -1,12 +1,16 @@
 """Unit tests for the `litellm` module."""
 
 import dataclasses
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from litellm.types.utils import Choices
 
-from euroeval.benchmark_modules.litellm import LiteLLMModel
+from euroeval.benchmark_modules.litellm import (
+    LiteLLMModel,
+    clean_model_id,
+    get_api_model_release_date,
+)
 from euroeval.data_models import BenchmarkConfig, DatasetConfig, ModelConfig
 from euroeval.exceptions import InvalidModel
 from euroeval.model_loading import load_model
@@ -108,3 +112,76 @@ class TestCreateModelOutput:
         assert output.scores[0] is not None
         assert len(output.scores[0]) == 1
         assert output.scores[1] == []
+
+
+@pytest.mark.parametrize(
+    ("model_id", "expected"),
+    [
+        ("openai/gpt-4o", "2024-05-13"),
+        ("openai/gpt-4o-2024-08-06", "2024-08-06"),
+        ("openai/gpt-4-0613", "2023-06-13"),
+        ("openai/gpt-3.5-turbo-0125", "2024-01-25"),
+        ("openai/o1-pro", "2025-04-14"),
+        ("openai/gpt-5-chat-latest", "2025-08-07"),
+        ("openai/gpt-5.2-pro", "2025-12-11"),
+        ("openai/gpt-5.4-pro", "2026-03-05"),
+        ("openai/gpt-5.5-pro", "2026-04-23"),
+        ("anthropic/claude-3-5-sonnet-20241022", "2024-10-22"),
+        ("anthropic/claude-sonnet-4-6", "2026-02-17"),
+        ("anthropic/claude-opus-4-7", "2026-04-16"),
+        ("anthropic/claude-mythos-preview", "2026-04-07"),
+        ("anthropic/claude-fable-5", "2026-06-09"),
+        ("anthropic/claude-sonnet-5", "2026-06-30"),
+        ("anthropic/claude-opus-5", "2026-07-24"),
+        ("gemini/gemini-3.1-pro-preview", "2026-02-19"),
+        ("gemini/gemini-3.1-flash-lite", "2026-03-03"),
+        ("gemini/gemini-3.5-flash", "2026-05-19"),
+        ("gemini/gemini-3.6-flash", "2026-07-21"),
+        ("gemini/gemini-3.7-flash", "2026-08-13"),
+        ("xai/grok-4-fast-reasoning", "2025-09-19"),
+        ("xai/grok-4.20", "2026-03-10"),
+        ("xai/grok-4.5", "2026-07-08"),
+        ("xai/grok-4.6", "2026-08-12"),
+        ("openai/gpt-5.6-luna", "2026-07-09"),
+        ("openai/gpt-5.6", "2026-07-09"),
+        ("provider/undated-model", None),
+        ("provider/model-2024-99-99", None),
+    ],
+)
+def test_get_api_model_release_date(model_id: str, expected: str | None) -> None:
+    """API aliases and dated model IDs resolve to their release dates."""
+    assert get_api_model_release_date(model_id) == expected
+
+
+def test_huggingface_model_id_is_preserved_for_custom_api(
+    benchmark_config: BenchmarkConfig,
+) -> None:
+    """Hugging Face model IDs remain valid for custom OpenAI-compatible APIs."""
+    benchmark_config = dataclasses.replace(
+        benchmark_config, api_base="https://router.huggingface.co/featherless-ai/v1"
+    )
+    model_id = "huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503"
+
+    assert (
+        clean_model_id(model_id=model_id, benchmark_config=benchmark_config) == model_id
+    )
+
+
+def test_litellm_model_config_includes_release_date(
+    benchmark_config: BenchmarkConfig,
+) -> None:
+    """API release metadata is propagated into the model configuration."""
+    config = LiteLLMModel.get_model_config(
+        model_id="openai/gpt-4o-2024-08-06", benchmark_config=benchmark_config
+    )
+    assert config.release_date == "2024-08-06"
+
+
+def test_manual_api_release_date_overrides_embedded_date() -> None:
+    """Curated annotations take precedence over dates parsed from model IDs."""
+    with patch.dict(
+        "euroeval.benchmark_modules.litellm.MODEL_RELEASE_DATE_MAPPING",
+        {r"provider/model-2024-01-01": "2024-02-03"},
+        clear=True,
+    ):
+        assert get_api_model_release_date("provider/model-2024-01-01") == "2024-02-03"

@@ -20,6 +20,7 @@ from .constants import (
     CHOICES_MAPPING,
     MAX_NUMBER_OF_LOGGING_LANGUAGES,
 )
+from .date_utils import normalise_release_date
 from .eee_utils import benchmark_result_from_eee_dict, benchmark_result_to_eee_dict
 from .enums import Device, GenerativeType, ModelType, TaskGroup
 from .exceptions import InvalidBenchmark
@@ -125,6 +126,7 @@ class BenchmarkResult(pydantic.BaseModel):
     commercially_licensed: bool | None = None
     open: bool | None = None
     trained_from_scratch: bool | None = None
+    release_date: str | None = None
 
     def append_to_results(self, results_path: Path) -> None:
         """Append the benchmark result to the results file.
@@ -273,6 +275,10 @@ class BenchmarkResult(pydantic.BaseModel):
         """
         return benchmark_result_from_eee_dict(config=config)
 
+    _normalise_release_date = pydantic.field_validator("release_date", mode="before")(
+        normalise_release_date
+    )
+
 
 class HashableDict(dict[t.Any, t.Any]):
     """A hashable dictionary."""
@@ -335,11 +341,15 @@ class HFModelInfo:
         adapter_base_model_id:
             The model ID of the base model if the model is an adapter model. Can be None
             if the model is not an adapter model.
+        release_date (optional):
+            The date when model weights were first publicly available, formatted as
+            ISO 8601. Defaults to None when it cannot be determined.
     """
 
     pipeline_tag: str
     tags: c.Sequence[str]
     adapter_base_model_id: str | None
+    release_date: str | None = None
 
 
 @dataclass
@@ -370,6 +380,8 @@ class ModelConfig:
         adapter_base_model_id:
             The model ID of the base model if the model is an adapter model. Can be None
             if the model is not an adapter model.
+        release_date (optional):
+            The model's public release date, formatted as ISO 8601. Defaults to None.
         generation_config (optional):
             The generation configuration for generative models, if specified in the
             model repository. Defaults to no generation configuration.
@@ -386,6 +398,7 @@ class ModelConfig:
     fresh: bool
     model_cache_dir: str
     adapter_base_model_id: str | None
+    release_date: str | None = None
     generation_config: GenerationConfig | None = None
 
     def __hash__(self) -> int:
