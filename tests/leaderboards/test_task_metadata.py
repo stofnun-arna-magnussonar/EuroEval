@@ -1,7 +1,17 @@
 """Tests for the `leaderboards.task_metadata` module."""
 
+from types import SimpleNamespace
+
+import pytest
+
+from leaderboards import task_metadata
+from leaderboards.constants import LEADERBOARD_TASKS
 from leaderboards.enums import LeaderboardCategory
-from leaderboards.task_metadata import category_includes_task, task_category
+from leaderboards.task_metadata import (
+    category_includes_task,
+    official_datasets_for_language,
+    task_category,
+)
 
 
 def test_category_includes_task_all_models_only_scores_nlu() -> None:
@@ -41,6 +51,23 @@ def test_category_includes_task_only_chat_shows_orthogonal_tasks() -> None:
     )
 
 
+def test_dataset_sources_omits_blank_sources_but_maps_valid_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only non-blank string sources are available for split-size lookups."""
+    configs = (
+        SimpleNamespace(name="speed", source=""),
+        SimpleNamespace(name="whitespace", source=" \t\n"),
+        SimpleNamespace(name="conll-nl", source="EuroEval/conll-nl-mini"),
+    )
+    monkeypatch.setattr(task_metadata, "_iter_all_dataset_configs", lambda: configs)
+    task_metadata.dataset_sources.cache_clear()
+    try:
+        assert task_metadata.dataset_sources() == {"conll-nl": "EuroEval/conll-nl-mini"}
+    finally:
+        task_metadata.dataset_sources.cache_clear()
+
+
 def test_task_category_european_values_is_exempt_from_instruct_exclusive() -> None:
     """european-values is restricted to instruction-tuned/reasoning models too.
 
@@ -75,3 +102,9 @@ def test_task_category_stereotype_bias_is_instruct_exclusive() -> None:
     Such a task is classified as instruct-exclusive.
     """
     assert task_category("multiple-choice-stereotype-bias") == "instruct_exclusive"
+
+
+def test_translation_is_excluded_from_leaderboard_dataset_selection() -> None:
+    """Translation remains outside the leaderboard task list for now."""
+    assert "translation" not in LEADERBOARD_TASKS
+    assert "translation" not in official_datasets_for_language("bulgarian")

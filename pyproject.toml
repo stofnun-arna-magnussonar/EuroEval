@@ -1,6 +1,6 @@
 [project]
 name = "EuroEval"
-version = "18.0.0.dev"
+version = "18.2.0"
 description = "The robust European language model benchmark."
 readme = "README.md"
 authors = [
@@ -12,6 +12,7 @@ maintainers = [
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "torch>=2.6.0",
+    "sympy>=1.13",  # For scoring math answers; already installed as a dependency of torch
     "pandas>=2.2.0",
     "numpy>=2.0.0",
     "mistral-common[soundfile]",
@@ -45,7 +46,7 @@ dependencies = [
     "nltk>=3.9.1",
     "langdetect>=1.0.9",
     "pyyaml>=6.0",
-    "lingua-language-detector>=2.2.0",
+    "cyrtranslit>=1.2.0",
     "google-cloud-aiplatform>=1.157.0",
     "kaleido>=1.3.0",
 ]
@@ -61,6 +62,9 @@ generative = [
     "vllm>=0.27.1; platform_system == 'Linux'",
     "ray>=2.55.0; platform_system == 'Linux'",
 ]
+laya = [
+    "laya>=0.3.6",
+]
 all = [
     "timm>=1.0.19",
     # vLLM setup for MacOS (versions specified below in sources)
@@ -70,6 +74,7 @@ all = [
     "bitsandbytes>=0.43.1; platform_system == 'Linux'",
     "vllm>=0.27.1; platform_system == 'Linux'",
     "ray>=2.55.0; platform_system == 'Linux'",
+    "laya>=0.3.6",
 ]
 leaderboards = [
     "anthropic>=0.49.0",
@@ -119,6 +124,11 @@ dev = [
 # PyPi releases seem to be lagging behind, so we use git sources directly
 vllm-metal = { git = "https://github.com/vllm-project/vllm-metal.git", tag = "v0.2.0-20260531-071330", marker = "platform_system == 'Darwin'" }
 # vLLM has no official wheels for macos arm64 and flashinfer is a default dep from 0.12.0 (which seems to only be x86_64 + cuda)
+# NOTE: vLLM's `setup.py` picks its target device from the *resolving* machine, not from
+# the environment being resolved for, so re-locking on a CUDA host builds this git source
+# as `+cu128` and pulls CUDA-only deps (PyNvVideoCodec, flashinfer, ...) into the macOS
+# split, which then fails to resolve. Set `VLLM_TARGET_DEVICE=cpu` when re-locking off
+# macOS, so that the metadata matches the `+cpu` build a Mac would produce.
 vllm = { git = "https://github.com/vllm-project/vllm.git", tag = "v0.27.1", marker = "platform_system == 'Darwin'" }
 
 [tool.uv]
@@ -133,8 +143,8 @@ environments = [
   # (https://github.com/vllm-project/vllm/blob/d7de043d55d1dd629554467e23874097e1c48993/requirements/cpu.txt#L9-L10)
   # This could be solved by them disallowing darwin in their cpu deps
   "platform_system == 'Darwin' and platform_machine == 'arm64'",
-  # And any combination of other platforms
-  "platform_system != 'Darwin'",
+  # And any combination of other platforms except Emscripten, where torch is unavailable
+  "platform_system != 'Darwin' and platform_system != 'Emscripten'",
 ]
 required-environments = [
   "platform_system == 'Darwin' and platform_machine == 'arm64'",
@@ -151,6 +161,7 @@ file = "LICENSE"
 [project.scripts]
 euroeval = "euroeval.cli:benchmark"
 scandeval = "euroeval.cli:benchmark"
+euroeval-worker = "euroeval_worker.cli:main"
 
 [tool.ruff]
 target-version = "py312"
@@ -279,6 +290,9 @@ pythonpath = [
     "src/scripts",
     "src/scripts/dataset_creation",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/euroeval", "src/euroeval_worker"]
 
 [build-system]
 requires = ["hatchling"]

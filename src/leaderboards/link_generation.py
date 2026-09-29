@@ -161,6 +161,23 @@ def generate_anthropic_url(model_id: str) -> str | None:
 
 
 @cache
+def generate_deepseek_url(model_id: str) -> str | None:
+    """Generate a pricing URL for a model hosted on the DeepSeek API.
+
+    Args:
+        model_id:
+            The DeepSeek model ID, including the ``deepseek/`` provider prefix.
+
+    Returns:
+        The DeepSeek API pricing URL, or None if the model is not identified as a
+        DeepSeek API model.
+    """
+    if model_id.startswith("deepseek/"):
+        return "https://api-docs.deepseek.com/quick_start/pricing/"
+    return None
+
+
+@cache
 def generate_google_url(model_id: str) -> str | None:
     """Generate a model URL for a model hosted on Google.
 
@@ -269,12 +286,8 @@ def generate_model_url(model_id: str) -> str | None:
     # `org/repo` slug rather than e.g. `org/repo (zero-shot)`.
     model_id_without_extras = split_model_id(model_id=plain_model_id(model_id)).model_id
 
-    # Any model with a cached decision (remove or keep-without-url) never gets
-    # a URL, so the model_url field stays None for these ids.
-    if _load_model_url_decision(model_id=model_id_without_extras) is not None:
-        return None
-
     url_generators = (
+        generate_deepseek_url,
         generate_ollama_url,
         generate_hf_hub_url,
         generate_openai_url,

@@ -16,12 +16,7 @@ import pytest
 import torch
 from requests.exceptions import RequestException
 
-from euroeval.benchmarker import (
-    Benchmarker,
-    adjust_logging_level,
-    clear_model_cache_fn,
-    get_record,
-)
+from euroeval.benchmarker import Benchmarker, adjust_logging_level, clear_model_cache_fn
 from euroeval.data_models import (
     BenchmarkConfig,
     BenchmarkResult,
@@ -30,8 +25,10 @@ from euroeval.data_models import (
     ModelConfig,
     Task,
 )
-from euroeval.enums import InferenceBackend, ModelType
+from euroeval.enums import InferenceBackend, ModelType, ShotMode
 from euroeval.exceptions import HuggingFaceHubDown
+from euroeval.result_cache import get_record
+from euroeval.tasks import CONTAMINATION_DETECTION, NER, SENT
 
 
 class TestClearCacheFn:
@@ -57,6 +54,136 @@ class TestClearCacheFn:
         """Test that no errors are thrown when clearing a non-existing cache."""
         clear_model_cache_fn(cache_dir="does-not-exist")
         rmtree(path="does-not-exist", ignore_errors=True)
+
+
+class TestCreateModelDatasetMapping:
+    """Tests for `Benchmarker._create_model_dataset_mapping`."""
+
+    def test_canary_is_preserved_alongside_supported_zero_shot_dataset(
+        self, benchmarker: Benchmarker, model_config: ModelConfig
+    ) -> None:
+        """The virtual canary bypasses task-group filtering for Laya models."""
+        zero_shot_model_config = replace(
+            model_config, model_type=ModelType.ZERO_SHOT_CLASSIFIER
+        )
+        canary_dataset_config = DatasetConfig(
+            name="contamination-canary",
+            pretty_name="Contamination canary",
+            task=CONTAMINATION_DETECTION,
+            languages=[Language(code="da", name="Danish")],
+        )
+        sent_dataset_config = DatasetConfig(
+            name="sent-dataset",
+            pretty_name="Sentiment dataset",
+            source="dataset_id",
+            task=SENT,
+            languages=[Language(code="da", name="Danish")],
+        )
+
+        mapping = benchmarker._create_model_dataset_mapping(
+            model_configs=[zero_shot_model_config],
+            dataset_configs=[canary_dataset_config, sent_dataset_config],
+        )
+
+        assert mapping[zero_shot_model_config] == [
+            canary_dataset_config,
+            sent_dataset_config,
+        ]
+
+    def test_standalone_canary_is_preserved_for_zero_shot_model(
+        self, benchmarker: Benchmarker, model_config: ModelConfig
+    ) -> None:
+        """A Laya-only canary run still includes its virtual dataset."""
+        zero_shot_model_config = replace(
+            model_config, model_type=ModelType.ZERO_SHOT_CLASSIFIER
+        )
+        canary_dataset_config = DatasetConfig(
+            name="contamination-canary",
+            pretty_name="Contamination canary",
+            task=CONTAMINATION_DETECTION,
+            languages=[Language(code="da", name="Danish")],
+        )
+
+        mapping = benchmarker._create_model_dataset_mapping(
+            model_configs=[zero_shot_model_config],
+            dataset_configs=[canary_dataset_config],
+        )
+
+        assert mapping[zero_shot_model_config] == [canary_dataset_config]
+
+    def test_unsupported_task_group_is_filtered_out_for_zero_shot_classifier(
+        self, benchmarker: Benchmarker, model_config: ModelConfig
+    ) -> None:
+        """A NER dataset is filtered out up front for a zero-shot classifier model."""
+        zero_shot_model_config = replace(
+            model_config, model_type=ModelType.ZERO_SHOT_CLASSIFIER
+        )
+        ner_dataset_config = DatasetConfig(
+            name="ner-dataset",
+            pretty_name="NER dataset",
+            source="dataset_id",
+            task=NER,
+            languages=[Language(code="da", name="Danish")],
+        )
+        sent_dataset_config = DatasetConfig(
+            name="sent-dataset",
+            pretty_name="Sentiment dataset",
+            source="dataset_id",
+            task=SENT,
+            languages=[Language(code="da", name="Danish")],
+        )
+
+        mapping = benchmarker._create_model_dataset_mapping(
+            model_configs=[zero_shot_model_config],
+            dataset_configs=[ner_dataset_config, sent_dataset_config],
+        )
+
+        assert mapping[zero_shot_model_config] == [sent_dataset_config]
+
+
+class TestDatasetArgumentConflicts:
+    """Tests for the mutually exclusive `dataset` and `task` arguments."""
+
+    def test_benchmark_with_dataset_and_language(
+        self, benchmarker: Benchmarker, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that a `language` argument does not conflict with a `dataset`."""
+        monkeypatch.setattr(
+            benchmarker, "_fetch_model_configs", lambda *args, **kwargs: []
+        )
+        monkeypatch.setattr(
+            benchmarker, "_create_model_dataset_mapping", lambda *args, **kwargs: {}
+        )
+        benchmark_results = benchmarker.benchmark(
+            model="dummy", dataset="dansk", language="da"
+        )
+        assert benchmark_results == []
+
+    def test_benchmark_with_dataset_and_task_raises(
+        self, benchmarker: Benchmarker
+    ) -> None:
+        """Test that specifying both `dataset` and `task` raises an error."""
+        with pytest.raises(ValueError, match="Only one of `task` and `dataset"):
+            benchmarker.benchmark(model="dummy", dataset="dansk", task="classification")
+
+    @pytest.mark.parametrize(
+        argnames=["language"],
+        argvalues=[("all",), ("da",), (["da"],)],
+        ids=["all", "str-code", "list-code"],
+    )
+    def test_init_with_dataset_and_language(self, language: str | list[str]) -> None:
+        """Test that a language selection can be combined with a `dataset`."""
+        benchmarker = Benchmarker(
+            dataset="dansk", language=language, progress_bar=False, save_results=False
+        )
+        assert [dataset.name for dataset in benchmarker.benchmark_config.datasets] == [
+            "dansk"
+        ]
+
+    def test_init_with_dataset_and_task_raises(self) -> None:
+        """Test that specifying both `dataset` and `task` raises an error."""
+        with pytest.raises(ValueError, match="Only one of `task` and `dataset"):
+            Benchmarker(task="classification", dataset="dansk")
 
 
 class TestDebugStartupVerbosity:
@@ -181,6 +308,125 @@ class TestDebugStartupVerbosity:
             "Run with `--verbose` for more information" in msg
             for msg in logged_messages
         )
+
+
+class TestZeroShotClassifierModelReuse:
+    """Tests that zero-shot classifier models are preloaded and reused."""
+
+    def test_zero_shot_classifier_is_not_skipped_by_generative_type_check(
+        self,
+        benchmarker: Benchmarker,
+        dataset_config: DatasetConfig,
+        model_config: ModelConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A preloaded zero-shot model without a generative type is benchmarked."""
+        zero_shot_model_config = replace(
+            model_config, model_type=ModelType.ZERO_SHOT_CLASSIFIER
+        )
+        loaded_model = MagicMock()
+        loaded_model.generative_type = None
+        assert None not in dataset_config.allowed_generative_types
+
+        monkeypatch.setattr(
+            benchmarker,
+            "_fetch_model_configs",
+            MagicMock(return_value=[zero_shot_model_config]),
+        )
+        monkeypatch.setattr(
+            benchmarker,
+            "_create_model_dataset_mapping",
+            MagicMock(return_value={zero_shot_model_config: [dataset_config]}),
+        )
+        monkeypatch.setattr(
+            benchmarker,
+            "_prepare_pending_benchmarks",
+            MagicMock(
+                return_value=(
+                    loaded_model,
+                    [(ShotMode.ZERO_SHOT, dataset_config)],
+                    [],
+                    None,
+                )
+            ),
+        )
+        monkeypatch.setattr(benchmarker, "_check_adapter_requirements", MagicMock())
+        benchmark_single_mock = MagicMock()
+        monkeypatch.setattr(benchmarker, "_benchmark_single", benchmark_single_mock)
+        monkeypatch.setattr(
+            benchmarker,
+            "_handle_benchmark_result",
+            MagicMock(return_value=(1, 0, 0, False)),
+        )
+
+        benchmarker.benchmark(model="test_model", dataset="sst5")
+
+        benchmark_single_mock.assert_called_once()
+
+    def test_zero_shot_classifier_model_is_loaded_once_across_datasets(
+        self,
+        benchmarker: Benchmarker,
+        benchmark_config: BenchmarkConfig,
+        dataset_config: DatasetConfig,
+        model_config: ModelConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`load_model` is called once and reused across two datasets."""
+        zero_shot_model_config = replace(
+            model_config, model_type=ModelType.ZERO_SHOT_CLASSIFIER
+        )
+        second_dataset_config = DatasetConfig(
+            name="dataset-2",
+            pretty_name="Dataset 2",
+            source="dataset_id",
+            task=dataset_config.task,
+            languages=dataset_config.languages,
+        )
+
+        loaded_model = MagicMock()
+        loaded_model.generative_type = None
+        loaded_model.num_params = 100
+        loaded_model.model_max_length = 512
+        loaded_model.vocab_size = 32_000
+        loaded_model.prepare_datasets.return_value = MagicMock()
+
+        load_model_mock = MagicMock(return_value=loaded_model)
+        monkeypatch.setattr("euroeval.benchmarker.load_model", load_model_mock)
+        monkeypatch.setattr("euroeval.benchmarker.enforce_reproducibility", MagicMock())
+        monkeypatch.setattr("euroeval.benchmarker.initial_logging", MagicMock())
+        monkeypatch.setattr("euroeval.benchmarker.load_data", MagicMock())
+        monkeypatch.setattr("euroeval.benchmarker.generate", MagicMock(return_value={}))
+        monkeypatch.setattr(
+            "euroeval.benchmarker.log_scores", MagicMock(return_value={})
+        )
+
+        prepared_model, pending_benchmarks, _, load_error = (
+            benchmarker._prepare_pending_benchmarks(
+                model_config=zero_shot_model_config,
+                datasets=[dataset_config, second_dataset_config],
+                benchmark_config=benchmark_config,
+                existing_results=[],
+            )
+        )
+
+        assert load_error is None
+        assert prepared_model is loaded_model
+        assert load_model_mock.call_count == 1
+        assert len(pending_benchmarks) == 2
+
+        for _shot_mode, pending_dataset_config in pending_benchmarks:
+            result = benchmarker._benchmark_single(
+                model=prepared_model,
+                model_config=zero_shot_model_config,
+                dataset_config=pending_dataset_config,
+                benchmark_config=benchmark_config,
+                num_finished_benchmarks=0,
+                num_total_benchmarks=len(pending_benchmarks),
+            )
+            assert isinstance(result, BenchmarkResult)
+
+        assert load_model_mock.call_count == 1
+        assert loaded_model.update_dataset_config.call_count == 2
 
 
 @pytest.fixture(scope="module")
@@ -488,6 +734,7 @@ def test_download_only_does_not_instantiate_model(
         run_with_cli=True,
         max_context_length=None,
         vocabulary_size=None,
+        num_parameters=None,
         download_only=True,
     )
 
@@ -501,6 +748,116 @@ def test_download_only_does_not_instantiate_model(
     assert snapshot_download_called, "snapshot_download should be called"
     assert not load_model_called, (
         "load_model should NOT be called in download_only mode"
+    )
+
+
+def test_encoder_canary_mixed_run_reuses_ordinary_result_metadata(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    dataset_config: DatasetConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A mixed encoder run should reuse metadata from its ordinary result."""
+    canary_dataset = DatasetConfig(
+        task=CONTAMINATION_DETECTION,
+        languages=benchmark_config.languages,
+        name="contamination-canary",
+    )
+    ordinary_result = BenchmarkResult(
+        dataset=dataset_config.name,
+        task=dataset_config.task.name,
+        languages=[language.code for language in dataset_config.languages],
+        model="encoder-model",
+        results={"raw": [], "total": {}},
+        num_model_parameters=456,
+        max_sequence_length=768,
+        vocabulary_size=64_000,
+        merge=False,
+        generative=False,
+        generative_type=None,
+        few_shot=False,
+        validation_split=True,
+    )
+    run_config = replace(
+        benchmark_config,
+        datasets=[dataset_config, canary_dataset],
+        force=True,
+        save_results=False,
+    )
+    encoder_config = replace(
+        model_config, model_id="encoder-model", revision="main", fresh=False
+    )
+
+    monkeypatch.setattr(benchmarker, "results_path", tmp_path / "results.jsonl")
+    monkeypatch.setattr(
+        benchmarker, "_build_benchmark_config", lambda **kwargs: run_config
+    )
+    monkeypatch.setattr(
+        benchmarker, "_fetch_model_configs", lambda *args, **kwargs: [encoder_config]
+    )
+    monkeypatch.setattr(
+        benchmarker, "_benchmark_single", lambda **kwargs: ordinary_result
+    )
+    load_model_mock = MagicMock(side_effect=AssertionError("unexpected model load"))
+    monkeypatch.setattr("euroeval.benchmarker.load_model", load_model_mock)
+
+    results = benchmarker.benchmark(model=encoder_config.model_id)
+
+    assert len(results) == 2
+    canary_result = results[1]
+    assert canary_result.task == CONTAMINATION_DETECTION.name
+    assert canary_result.num_model_parameters == ordinary_result.num_model_parameters
+    assert canary_result.max_sequence_length == ordinary_result.max_sequence_length
+    assert canary_result.vocabulary_size == ordinary_result.vocabulary_size
+    assert load_model_mock.call_count == 0
+
+
+def test_encoder_canary_standalone_uses_supported_metadata_task(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A standalone encoder canary must not load the virtual text-to-text task."""
+    canary_dataset = DatasetConfig(
+        task=CONTAMINATION_DETECTION,
+        languages=benchmark_config.languages,
+        name="contamination-canary",
+    )
+    run_config = replace(
+        benchmark_config, datasets=[canary_dataset], force=True, save_results=False
+    )
+    encoder_config = replace(
+        model_config, model_id="encoder-model", revision="main", fresh=False
+    )
+    metadata_model = MagicMock(
+        num_params=123, model_max_length=512, vocab_size=32_000, generative_type=None
+    )
+    load_model_mock = MagicMock(return_value=metadata_model)
+
+    monkeypatch.setattr(benchmarker, "results_path", tmp_path / "results.jsonl")
+    monkeypatch.setattr(
+        benchmarker, "_build_benchmark_config", lambda **kwargs: run_config
+    )
+    monkeypatch.setattr(
+        benchmarker, "_fetch_model_configs", lambda *args, **kwargs: [encoder_config]
+    )
+    monkeypatch.setattr("euroeval.benchmarker.load_model", load_model_mock)
+
+    results = benchmarker.benchmark(model=encoder_config.model_id)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.task == CONTAMINATION_DETECTION.name
+    assert result.contamination_canary_evidence is not None
+    assert result.contamination_canary_evidence["status"] == "not_applicable"
+    assert result.contamination_canary_evidence["reason"] == "encoder"
+    assert result.num_model_parameters == metadata_model.num_params
+    assert load_model_mock.call_args.kwargs["dataset_config"].task != (
+        CONTAMINATION_DETECTION
     )
 
 
@@ -735,3 +1092,88 @@ def test_get_record(
         is not None
     )
     assert benchmarked == expected
+
+
+@pytest.mark.parametrize("param", [None, "multilingual"])
+def test_laya_download_only_resolves_requested_checkpoint(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    param: str | None,
+) -> None:
+    """Laya downloads use the parameter-aware resolver, not cache globbing."""
+    model_cache_dir = tmp_path / "model-cache"
+    (model_cache_dir / "other-variant").mkdir(parents=True)
+    (model_cache_dir / "other-variant" / "model.safetensors").touch()
+    zero_shot_config = replace(
+        model_config,
+        model_type=ModelType.ZERO_SHOT_CLASSIFIER,
+        model_cache_dir=str(model_cache_dir),
+        param=param,
+    )
+    resolver_mock = MagicMock()
+    monkeypatch.setattr(
+        "euroeval.benchmark_modules.zero_shot_classifier._resolve_checkpoint_path",
+        resolver_mock,
+    )
+    monkeypatch.setattr("euroeval.benchmarker.get_hf_token", lambda **kwargs: None)
+
+    benchmarker._download_model_only(
+        model_config=zero_shot_config, benchmark_config=benchmark_config
+    )
+
+    resolver_mock.assert_called_once_with(
+        model_id=zero_shot_config.model_id,
+        subfolder=param,
+        cache_dir=str(model_cache_dir),
+        token=None,
+    )
+
+
+def test_zero_shot_canary_standalone_reuses_loaded_model_metadata(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A standalone Laya canary does not load the model a second time."""
+    canary_dataset = DatasetConfig(
+        task=CONTAMINATION_DETECTION,
+        languages=benchmark_config.languages,
+        name="contamination-canary",
+    )
+    run_config = replace(
+        benchmark_config, datasets=[canary_dataset], force=True, save_results=False
+    )
+    zero_shot_config = replace(
+        model_config,
+        model_id="laya-model",
+        revision="main",
+        fresh=False,
+        model_type=ModelType.ZERO_SHOT_CLASSIFIER,
+    )
+    metadata_model = MagicMock(
+        num_params=123, model_max_length=512, vocab_size=32_000, generative_type=None
+    )
+    load_model_mock = MagicMock(return_value=metadata_model)
+
+    monkeypatch.setattr(benchmarker, "results_path", tmp_path / "results.jsonl")
+    monkeypatch.setattr(
+        benchmarker, "_build_benchmark_config", lambda **kwargs: run_config
+    )
+    monkeypatch.setattr(
+        benchmarker, "_fetch_model_configs", lambda *args, **kwargs: [zero_shot_config]
+    )
+    monkeypatch.setattr("euroeval.benchmarker.load_model", load_model_mock)
+
+    results = benchmarker.benchmark(model=zero_shot_config.model_id)
+
+    assert len(results) == 1
+    assert results[0].task == CONTAMINATION_DETECTION.name
+    assert load_model_mock.call_count == 1
+    assert load_model_mock.call_args.kwargs["dataset_config"].task != (
+        CONTAMINATION_DETECTION
+    )

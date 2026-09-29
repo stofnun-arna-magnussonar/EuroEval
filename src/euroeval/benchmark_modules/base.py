@@ -60,6 +60,13 @@ class BenchmarkModule(ABC):
     fresh_model: bool
     batching_preference: "BatchingPreference"
     high_priority: bool
+
+    # Generic modules that may claim any model when metadata is unavailable (e.g.
+    # `model_info.siblings` is None, offline). Checked after specific modules of the
+    # same `high_priority`, so a specific module gets first refusal on ambiguous
+    # cases instead of the outcome depending on import order.
+    is_fallback: bool = False
+
     allowed_params: dict[re.Pattern[str], c.Sequence[str]] = {re.compile(r".*"): []}
     _model: nn.Module
 
@@ -107,6 +114,20 @@ class BenchmarkModule(ABC):
         else:
             logging_msg += f"and a maximum context length of {self.model_max_length:,}."
         log_once(message=logging_msg, level=logging.INFO)
+
+    def collect_canary_completions(self, prompts: c.Sequence[str]) -> list[str]:
+        """Generate raw continuations for the separate contamination canary.
+
+        Args:
+            prompts:
+                Frozen text-completion prompts. They are not benchmark samples.
+
+        Returns:
+            One continuation per prompt in input order.
+        """
+        raise NotImplementedError(
+            f"Canary completion has not been implemented for {self.__class__.__name__}."
+        )
 
     @property
     def compute_metrics(self) -> "ComputeMetricsFunction":

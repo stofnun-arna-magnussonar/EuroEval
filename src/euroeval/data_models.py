@@ -22,7 +22,7 @@ from .constants import (
 )
 from .date_utils import normalise_release_date
 from .eee_utils import benchmark_result_from_eee_dict, benchmark_result_to_eee_dict
-from .enums import Device, GenerativeType, ModelType, TaskGroup
+from .enums import Device, GenerativeType, ModelType, ShotMode, TaskGroup
 from .exceptions import InvalidBenchmark
 from .jsonl_io import parse_jsonl_lines
 from .languages import (
@@ -122,11 +122,31 @@ class BenchmarkResult(pydantic.BaseModel):
     vllm_version: str | None = get_package_version("vllm")
     xgrammar_version: str | None = get_package_version("xgrammar")
     litellm_version: str | None = None
+    laya_version: str | None = None
+    model_type: str | None = None
+    inference_engine: str | None = None
     # EuroEval-specific metadata fields (preserved through EEE conversion)
     commercially_licensed: bool | None = None
     open: bool | None = None
     trained_from_scratch: bool | None = None
     release_date: str | None = None
+    contamination_canary_evidence: dict[str, object] | None = None
+
+    @pydantic.field_validator("contamination_canary_evidence", mode="before")
+    @classmethod
+    def _validate_contamination_canary_evidence(
+        cls, value: object
+    ) -> dict[str, object] | None:
+        """Validate and canonicalise embedded contamination-canary evidence.
+
+        Returns:
+            The canonical evidence mapping, or ``None`` when absent.
+        """
+        if value is None:
+            return None
+        from .canary_evidence import evidence_from_dict  # noqa: PLC0415
+
+        return evidence_from_dict(value).to_dict()
 
     def append_to_results(self, results_path: Path) -> None:
         """Append the benchmark result to the results file.
@@ -344,12 +364,15 @@ class HFModelInfo:
         release_date (optional):
             The date when model weights were first publicly available, formatted as
             ISO 8601. Defaults to None when it cannot be determined.
+        siblings (optional):
+            The repo's file names, or None if not fetched (e.g. offline, local).
     """
 
     pipeline_tag: str
     tags: c.Sequence[str]
     adapter_base_model_id: str | None
     release_date: str | None = None
+    siblings: c.Sequence[str] | None = None
 
 
 @dataclass
@@ -577,7 +600,7 @@ class Task:
     uses_logprobs: bool = False
     requires_logprobs: bool = False
     default_allowed_model_types: c.Sequence[ModelType] = field(
-        default_factory=lambda: [ModelType.ENCODER, ModelType.GENERATIVE]
+        default_factory=lambda: list(ModelType)
     )
     default_allowed_generative_types: c.Sequence[GenerativeType] = field(
         default_factory=lambda: [
@@ -735,7 +758,7 @@ class DatasetConfig:
         self._pretty_name = pretty_name
         self._source = source
         self.task = task
-        self.languages = languages
+        self.languages = list(languages)
 
         template = self.task.template_dict.get(self.main_language)
         self.prompt_prefix = (
@@ -882,10 +905,15 @@ class DatasetConfig:
         Returns:
             The natural string representation of the labels in specified language.
         """
+        main_language = self.main_language
+        if not isinstance(main_language, Language):
+            # Translation datasets have a (source, target) tuple; the labels, if any,
+            # belong to the target language.
+            _, main_language = main_language
         if self.task.task_group == TaskGroup.TOKEN_CLASSIFICATION:
-            sep_word = self.main_language.and_separator
+            sep_word = main_language.and_separator
         else:
-            sep_word = self.main_language.or_separator
+            sep_word = main_language.or_separator
 
         if labels is None:
             labels = list()
@@ -968,23 +996,18 @@ class DatasetConfig:
         )
 
     @property
-    def main_language(self) -> Language | tuple[Language, Language]:
+    def main_language(self) -> "Language | tuple[Language, Language]":
         """The main language of the dataset.
 
         Returns:
-            The main language or languages of the dataset.
+            The main language of the dataset. For the translation task, the
+            `TranslationDatasetConfig` subclass overrides this to return the
+            (source, target) language pair.
 
         Raises:
             InvalidBenchmark:
                 If the dataset has no languages.
         """
-        # Importing here to avoid circular imports
-        from .tasks import TRANSLATION  # noqa: PLC0415
-
-        # Special case for datasets with multiple languages
-        if self.task == TRANSLATION:
-            return (self.languages[0], self.languages[1])
-
         match len(self.languages):
             case 0:
                 raise InvalidBenchmark(
@@ -1117,8 +1140,9 @@ class BenchmarkConfig:
         evaluate_test_split:
             Whether to evaluate on the test split.
         few_shot:
-            Whether to only evaluate the model using few-shot evaluation. Only relevant
-            if the model is generative.
+            The shot policy used during planning. ``ShotMode.AUTO`` selects modes
+            automatically; booleans remain accepted for backwards compatibility. This
+            field is never persisted in a benchmark result.
         num_iterations:
             The number of iterations each model should be evaluated for.
         gpu_memory_utilization:
@@ -1153,6 +1177,9 @@ class BenchmarkConfig:
         vocabulary_size:
             Override for the vocabulary size of the model. If None, the value will be
             inferred automatically from the model.
+        num_parameters:
+            Override for the number of parameters in the model. If None, the value will
+            be inferred automatically from the model.
         use_bits_per_character:
             Whether to compute bits-per-character (BPC) on the ground-truth answer.
             For multiple-choice tasks, treats benchmark as text-to-text with bare
@@ -1173,7 +1200,7 @@ class BenchmarkConfig:
     trust_remote_code: bool
     clear_model_cache: bool
     evaluate_test_split: bool
-    few_shot: bool
+    few_shot: ShotMode | bool
     num_iterations: int
     gpu_memory_utilization: float
     attention_backend: (
@@ -1191,6 +1218,7 @@ class BenchmarkConfig:
     run_with_cli: bool
     max_context_length: int | None
     vocabulary_size: int | None
+    num_parameters: int | None
     use_bits_per_character: bool = False
 
     def __post_init__(self) -> None:
@@ -1228,7 +1256,7 @@ class BenchmarkConfigParams(pydantic.BaseModel):
     trust_remote_code: bool
     clear_model_cache: bool
     evaluate_test_split: bool
-    few_shot: bool
+    few_shot: ShotMode | bool | None
     num_iterations: int
     requires_safetensors: bool
     download_only: bool
@@ -1247,4 +1275,56 @@ class BenchmarkConfigParams(pydantic.BaseModel):
     run_with_cli: bool
     max_context_length: int | None
     vocabulary_size: int | None
+    num_parameters: int | None
     use_bits_per_character: bool = False
+
+
+class TranslationDatasetConfig(DatasetConfig):
+    """Configuration for a translation dataset.
+
+    Translation datasets evaluate translation from a source language into a target
+    language. Those two languages are kept on this dedicated subclass rather than on
+    `DatasetConfig`, since they are only meaningful for the translation task and would
+    otherwise bloat every dataset config. The `languages` attribute continues to hold
+    the single leaderboard language (the non-English side), so translation datasets are
+    never selected for or filed under the English leaderboard.
+    """
+
+    def __init__(
+        self,
+        task: Task,
+        languages: c.Sequence[Language],
+        source_language: Language,
+        target_language: Language,
+        **kwargs,
+    ) -> None:
+        """Initialise a TranslationDatasetConfig object.
+
+        Args:
+            task:
+                The task of the dataset.
+            languages:
+                The ISO 639-1 language codes of the entries in the dataset. This is the
+                leaderboard language (the non-English side of the translation), not the
+                source/target pair.
+            source_language:
+                The language to translate from.
+            target_language:
+                The language to translate into.
+            **kwargs:
+                Additional keyword arguments passed on to `DatasetConfig`.
+        """
+        # Set before calling super().__init__, as the base initialiser reads
+        # `main_language` (overridden below) to select the prompt template.
+        self.source_language = source_language
+        self.target_language = target_language
+        super().__init__(task=task, languages=languages, **kwargs)
+
+    @property
+    def main_language(self) -> tuple[Language, Language]:
+        """The source and target languages of the translation dataset.
+
+        Returns:
+            The (source, target) language pair.
+        """
+        return (self.source_language, self.target_language)

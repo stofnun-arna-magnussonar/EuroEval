@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 
 from euroeval.string_utils import split_model_id
 
+from .contamination_canary import is_canary_record
 from .jsonl_io import load_records_from_result_tree
 from .records import plain_model_id
 
@@ -72,7 +73,11 @@ class Cache:
         if not results_dir.exists():
             raise FileNotFoundError(f"Results directory {results_dir} not found.")
 
-        records = load_records_from_result_tree(results_dir=results_dir)
+        records = [
+            record
+            for record in load_records_from_result_tree(results_dir=results_dir)
+            if not is_canary_record(record)
+        ]
 
         return cls._from_records(
             records=records, desc="Building caches from results dir"
@@ -119,7 +124,9 @@ class Cache:
                 ]
             if "model_url" in additional and additional["model_url"] is not None:
                 cache.model_url[model_id] = additional["model_url"]
-            if "release_date" in additional:
+            # Only a resolved date is cached: a stored null means "not known at
+            # the time", not "unknowable", so it must not stop a later lookup.
+            if additional.get("release_date") is not None:
                 cache.release_date[model_id] = additional["release_date"]
 
         return cache

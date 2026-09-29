@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from leaderboards.score_extraction import (
     _is_better_metadata,
     extract_model_metadata,
@@ -38,6 +40,7 @@ class TestExtractModelMetadata:
                 "vocabulary_size": "32000",
                 "max_sequence_length": "4096",
                 "model_url": "https://huggingface.co/ollama/model-full",
+                "release_date": "2024-02-03",
             },
         )
 
@@ -61,6 +64,7 @@ class TestExtractModelMetadata:
             "commercial",
             "merge",
             "open",
+            "release_date",
             "trained_from_scratch",
             "model_url",
         ]
@@ -85,6 +89,7 @@ class TestExtractModelMetadata:
         assert metadata[model_missing_key]["commercial"] is False  # Explicit False
         assert metadata[model_missing_key]["merge"] is False  # Default
         assert metadata[model_missing_key]["open"] is None  # Default
+        assert metadata[model_missing_key]["release_date"] is None  # Default
         assert metadata[model_missing_key]["trained_from_scratch"] is None  # Default
         assert math.isnan(metadata[model_missing_key]["parameters"])
         assert math.isnan(metadata[model_missing_key]["vocabulary_size"])
@@ -98,6 +103,7 @@ class TestExtractModelMetadata:
         assert metadata[model_full_key]["commercial"] is True
         assert metadata[model_full_key]["merge"] is False
         assert metadata[model_full_key]["open"] is True
+        assert metadata[model_full_key]["release_date"] == "2024-02-03"
         assert metadata[model_full_key]["trained_from_scratch"] is True
         assert metadata[model_full_key]["parameters"] == 7_000_000_000.0
         assert metadata[model_full_key]["vocabulary_size"] == 32_000.0
@@ -415,6 +421,59 @@ class TestExtractModelMetadata:
 class TestGroupResultsByModel:
     """Tests for the `group_results_by_model` function."""
 
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ([-0.6, -0.8, float("nan"), float("inf"), -101, "bad"], [-60.0, -80.0]),
+            ([-60, -80, 101, None], [-60.0, -80.0]),
+        ],
+    )
+    def test_negative_mcc_and_invalid_iterations(
+        self, raw: list, expected: list[float]
+    ) -> None:
+        """Retain valid negative MCC without allowing invalid iterations through."""
+        record = {
+            "model_info": {"name": "org/model"},
+            "eval_library": {
+                "additional_details": {
+                    "dataset": "angry-tweets",
+                    "task": "sentiment-classification",
+                    "raw_results": [{"test_mcc": value} for value in raw],
+                }
+            },
+            "evaluation_results": [
+                {"evaluation_name": "test_mcc", "score_details": {"score": -70.0}}
+            ],
+        }
+
+        scores = group_results_by_model(results=[record])["org/model"]["angry-tweets"]
+        assert scores[0][0] == expected
+        assert scores[0][1] == -70.0
+        assert scores[0][2] == 10.0
+
+    def test_non_mcc_rejects_negative_and_out_of_range_scores(self) -> None:
+        """Unsigned percentage metrics reject negative and over-100 samples."""
+        record = {
+            "model_info": {"name": "org/model"},
+            "eval_library": {
+                "additional_details": {
+                    "dataset": "angry-tweets",
+                    "task": "sentiment-classification",
+                    "raw_results": [
+                        {"test_macro_f1": value}
+                        for value in (-1, 0.7, 0.8, 101, float("nan"))
+                    ],
+                }
+            },
+            "evaluation_results": [
+                {"evaluation_name": "test_macro_f1", "score_details": {"score": 70.0}}
+            ],
+        }
+
+        scores = group_results_by_model(results=[record])["org/model"]["angry-tweets"]
+        assert scores[0][0] == [70.0, 80.0]
+        assert scores[0][1] == 70.0
+
     def test_split_agnostic_dataset_mirrored_onto_val_variant(self) -> None:
         """Regression: a no-validation-split dataset shows on both variant rows.
 
@@ -638,87 +697,33 @@ class TestIsBetterMetadata:
             is False
         )
 
-    def test_prefers_non_none_over_none(self) -> None:
-        """Non-None values are preferred over None."""
-        assert _is_better_metadata(new_value=True, old_value=None, field="open") is True
+    @pytest.mark.parametrize(
+        "field", ["commercial", "merge", "open", "trained_from_scratch"]
+    )
+    def test_prefers_present_over_absent_for_booleans(self, field: str) -> None:
+        """Present boolean metadata is preferred over absent metadata."""
+        assert _is_better_metadata(new_value=True, old_value=None, field=field) is True
+        assert _is_better_metadata(new_value=False, old_value=None, field=field) is True
+        assert _is_better_metadata(new_value=None, old_value=True, field=field) is False
         assert (
-            _is_better_metadata(new_value=None, old_value=True, field="open") is False
+            _is_better_metadata(new_value=None, old_value=False, field=field) is False
+        )
+        assert (
+            _is_better_metadata(new_value=False, old_value=False, field=field) is False
         )
 
-    def test_prefers_non_none_over_none_commercial(self) -> None:
-        """Non-None values are preferred over None for commercial field."""
-        assert (
-            _is_better_metadata(new_value=True, old_value=None, field="commercial")
-            is True
-        )
 
-    def test_prefers_present_over_absent_for_booleans(self) -> None:
-        """For boolean fields, present (non-None) is preferred over absent (None).
+def test_explicit_zero_shot_classifier_metadata_survives_stale_records() -> None:
+    """Use the EEE model type even when an older result lacks it."""
+    enriched = {
+        "model_info": {
+            "name": "ollama/classifier",
+            "additional_details": {"model_type": "zero_shot_classifier"},
+            "inference_engine": {"name": "laya"},
+        }
+    }
+    stale = {"model_info": {"name": "ollama/classifier"}}
 
-        Explicit False is legitimate metadata and should be preserved.
-        """
-        # Present value preferred over absent
-        assert (
-            _is_better_metadata(new_value=True, old_value=None, field="commercial")
-            is True
-        )
-        assert (
-            _is_better_metadata(new_value=False, old_value=None, field="commercial")
-            is True
-        )
-        # Absent value not preferred over present
-        assert (
-            _is_better_metadata(new_value=None, old_value=True, field="commercial")
-            is False
-        )
-        assert (
-            _is_better_metadata(new_value=None, old_value=False, field="commercial")
-            is False
-        )
-        # Equal presence: neither is "better" (don't overwrite existing)
-        assert (
-            _is_better_metadata(new_value=False, old_value=False, field="commercial")
-            is False
-        )
+    metadata = extract_model_metadata(results=[stale, enriched, stale])
 
-    def test_prefers_present_over_absent_for_merge(self) -> None:
-        """For merge field, present (non-None) is preferred over absent (None).
-
-        Explicit False is legitimate metadata and should be preserved.
-        """
-        assert (
-            _is_better_metadata(new_value=False, old_value=None, field="merge") is True
-        )
-        assert (
-            _is_better_metadata(new_value=None, old_value=False, field="merge") is False
-        )
-
-    def test_prefers_present_over_absent_for_open(self) -> None:
-        """For open field, present (non-None) is preferred over absent (None).
-
-        Explicit False is legitimate metadata and should be preserved.
-        """
-        assert (
-            _is_better_metadata(new_value=False, old_value=None, field="open") is True
-        )
-        assert (
-            _is_better_metadata(new_value=None, old_value=False, field="open") is False
-        )
-
-    def test_prefers_present_over_absent_for_trained_from_scratch(self) -> None:
-        """For trained_from_scratch field, present (non-None) is preferred over absent.
-
-        Explicit False is legitimate metadata and should be preserved.
-        """
-        assert (
-            _is_better_metadata(
-                new_value=False, old_value=None, field="trained_from_scratch"
-            )
-            is True
-        )
-        assert (
-            _is_better_metadata(
-                new_value=None, old_value=False, field="trained_from_scratch"
-            )
-            is False
-        )
+    assert metadata["ollama/classifier"]["model_type"] == "zero_shot_classifier"

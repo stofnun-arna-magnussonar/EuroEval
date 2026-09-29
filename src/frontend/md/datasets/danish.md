@@ -1366,6 +1366,106 @@ You can evaluate this dataset directly as follows:
 euroeval --model <model-id> --dataset dameta
 ```
 
+### Unofficial: Danish Similarity Outlier Detection
+
+This dataset asks the model to identify the word that is least semantically similar to the
+other five words in a list of six Danish words. It is part of the
+[Danish Semantic Reasoning Benchmark](https://github.com/kuhumcst/danish-semantic-reasoning-benchmark)
+and is based on the Danish Thesaurus. It contains fine-, medium- and coarse-grained
+similarity variants. The variants differ in how far the outlier is from the core group in
+the thesaurus hierarchy.
+
+The source archive contains 1,250 source IDs in each granularity. Four IDs were removed
+because their options were not distinct. We split the remaining 1,246 complete source-ID
+groups with `random_state=4242`, keeping the fine, medium and coarse rows for each ID in
+the same partition. We use 341 / 85 / 682 groups for training, validation and testing,
+respectively, resulting in 1,023 / 255 / 2,046 samples.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Hvilket ord passer mindst sammen med de andre?\nSvarmuligheder:\na. klint\nb. hældning\nc. brink\nd. kam\ne. undergrund\nf. skråning",
+  "label": "e",
+  "source_id": "v1_0007",
+  "granularity": "coarse",
+  "chapter": "1",
+  "section": "1.015"
+}
+```
+
+```json
+{
+  "text": "Hvilket ord passer mindst sammen med de andre?\nSvarmuligheder:\na. kedel\nb. afgrund\nc. slugt\nd. hulning\ne. dalsænkning\nf. jordhule",
+  "label": "f",
+  "source_id": "v1_0008",
+  "granularity": "fine",
+  "chapter": "1",
+  "section": "1.015"
+}
+```
+
+```json
+{
+  "text": "Hvilket ord passer mindst sammen med de andre?\nSvarmuligheder:\na. vættelys\nb. dolerit\nc. koralkalk\nd. limsten\ne. myremalm\nf. bjergart",
+  "label": "a",
+  "source_id": "v1_0010",
+  "granularity": "medium",
+  "chapter": "1",
+  "section": "1.015"
+}
+```
+
+The source archive is pinned to commit
+[`3da3edf143fc386b02bb98dedca3cbfb8a905be0`](https://github.com/kuhumcst/danish-semantic-reasoning-benchmark/tree/3da3edf143fc386b02bb98dedca3cbfb8a905be0/similarity).
+The processing script reads the fine, medium and coarse TSV files, removes malformed rows
+and rows with duplicate options, and stores the source ID, granularity, chapter and section
+with each formatted question. The Hub dataset is the capped version, named
+`EuroEval/danish-similarity-outlier-mini`.
+
+The source data is available under the
+[CC BY-ND 4.0 licence](https://creativecommons.org/licenses/by-nd/4.0/). The dataset is
+based on the Danish Thesaurus and credits the
+[Society for Danish Language and Literature](https://dsl.dk/).
+
+The dataset is described in the following paper:
+
+> Bolette Pedersen, Nathalie Sørensen, Sussi Olsen, Sanni Nimb, and Simon Gray. 2024.
+> [Towards a Danish Semantic Reasoning Benchmark - Compiled from Lexical-Semantic
+> Resources for Assessing Selected Language Understanding Capabilities of Large Language
+> Models](https://aclanthology.org/2024.lrec-main.1421/).
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 5
+- Prefix prompt:
+
+  ```text
+  Følgende er multiple choice spørgsmål (med svar).
+  ```
+
+- Base prompt template:
+
+  ```text
+  Spørgsmål: {text}
+  Svar: {label}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  Spørgsmål: {text}
+
+  Besvar ovenstående spørgsmål ved at svare med 'a', 'b', 'c', 'd', 'e' eller 'f', og intet andet.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset danish-similarity-outlier
+```
+
 ## Common-sense Reasoning
 
 ### Winogrande-da
@@ -2257,4 +2357,280 @@ You can evaluate this dataset directly as follows:
 
 ```bash
 euroeval --model <model-id> --dataset ragtruth-da
+```
+
+## Translation
+
+### WMT24++ English to Danish
+
+This dataset was published in [this paper](https://doi.org/10.48550/arXiv.2502.12404)
+and is an extension of the original WMT24 dataset. It contains manually translated
+examples for the English-Danish translation pair.
+
+The original full dataset consists of 998 samples for this language pair. A small
+portion of the samples were marked as bad, however, and we exclude those. We use 64
+samples for the training split, 128 samples for the validation split, and the rest for
+the test split.
+
+We use the Danish translation pair from the dataset, where the source text is in English
+and the target text is in Danish.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Hello, how are you?",
+  "target_text": "Hej, hvordan har du det?"
+}
+```
+
+```json
+{
+  "text": "The brown fox jumps over the lazy dog.",
+  "target_text": "Den brune ræv hopper over den dovne hund."
+}
+```
+
+```json
+{
+  "text": "Copenhagen is the capital of Denmark.",
+  "target_text": "København er hovedstaden i Danmark."
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 5
+- Prefix prompt:
+
+  ```text
+  The following are English texts with corresponding Danish translations.
+  ```
+
+- Base prompt template:
+
+  ```text
+  English text: {text}
+  Danish translation: {target_text}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  English text: {text}
+
+  Translate the above text into Danish.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset wmt24pp-en-da
+```
+
+### Unofficial: WMT24++ Danish to English
+
+This dataset was published in [this paper](https://doi.org/10.48550/arXiv.2502.12404)
+and is an extension of the original WMT24 dataset. It contains manually translated
+examples for the English-Danish translation pair.
+
+The original full dataset consists of 998 samples for this language pair. A small
+portion of the samples were marked as bad, however, and we exclude those. We use 64
+samples for the training split, 128 samples for the validation split, and the rest for
+the test split.
+
+We use the Danish translation pair from the dataset, where the source text is in Danish
+and the target text is in English.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Hej, hvordan har du det?",
+  "target_text": "Hello, how are you?"
+}
+```
+
+```json
+{
+  "text": "Den brune ræv hopper over den dovne hund.",
+  "target_text": "The brown fox jumps over the lazy dog."
+}
+```
+
+```json
+{
+  "text": "København er hovedstaden i Danmark.",
+  "target_text": "Copenhagen is the capital of Denmark."
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 5
+- Prefix prompt:
+
+  ```text
+  Nedenfor er danske tekster med tilhørende English oversættelser.
+  ```
+
+- Base prompt template:
+
+  ```text
+  Dansk tekst: {text}
+  English oversættelse: {target_text}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  Dansk tekst: {text}
+
+  Oversæt den ovenstående tekst til English.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset wmt24pp-da-en
+```
+
+### FLORES+ English to Danish
+
+This dataset is part of the FLORES+ benchmark, maintained by the Open Language Data
+Initiative (OLDI), which extends the original FLORES-200 dataset. It consists of
+sentences sampled from English Wikimedia articles (Wikinews, Wikijunior and Wikivoyage)
+and professionally translated into each language, with every sentence translated in a
+multi-way parallel fashion.
+
+We use 128 / 256 / 1,012 samples for the training, validation and test splits,
+respectively. The training and validation splits are sampled from the FLORES+ `dev`
+split, and the test split is the entire FLORES+ `devtest` split.
+
+We use the English-to-Danish direction, where the source text is in English and the
+target text is in Danish.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Given how remote many of the pueblos are, you won't be able to find a significant amount of nightlife without traveling to Albuquerque or Santa Fe.",
+  "target_text": "Fordi mange af puebloerne er så afsides, vil du ikke finde noget betydeligt natteliv medmindre du rejser til Albuquerque eller Santa Fe."
+}
+```
+
+```json
+{
+  "text": "For instance, children who identify with a racial minority that is stereotyped as not doing well in school tend to not do well in school once they learn about the stereotype associated with their race.",
+  "target_text": "For eksempel vil børn, der identificeres med en raceminoritet, der stereotypt opfattes som klarende sig dårligt i skolen, klarer sig dårligt i skolen, når de lærer om den stereotyp, der er associeret med deres race."
+}
+```
+
+```json
+{
+  "text": "It's compacted snow with crevasses filled in and marked by flags. It can only be traveled by specialized tractors, hauling sleds with fuel and supplies.",
+  "target_text": "Det er komprimeret sne med sprækker, der er fyldt og markeret med flag. Det eneste, der kan bevæge sig på den, er specialiserede traktorer, der trækker slæder med brændstof og forsyninger."
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 5
+- Prefix prompt:
+
+  ```text
+  The following are English texts with corresponding Danish translations.
+  ```
+
+- Base prompt template:
+
+  ```text
+  English text: {text}
+  Danish translation: {target_text}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  English text: {text}
+
+  Translate the above text into Danish.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset flores-en-da
+```
+
+### Unofficial: FLORES+ Danish to English
+
+This dataset is part of the FLORES+ benchmark, maintained by the Open Language Data
+Initiative (OLDI), which extends the original FLORES-200 dataset. It consists of
+sentences sampled from English Wikimedia articles (Wikinews, Wikijunior and Wikivoyage)
+and professionally translated into each language, with every sentence translated in a
+multi-way parallel fashion.
+
+We use 128 / 256 / 1,012 samples for the training, validation and test splits,
+respectively. The training and validation splits are sampled from the FLORES+ `dev`
+split, and the test split is the entire FLORES+ `devtest` split.
+
+We use the Danish-to-English direction, where the source text is in Danish and the
+target text is in English.
+
+Here are a few examples from the training split:
+
+```json
+{
+  "text": "Fordi mange af puebloerne er så afsides, vil du ikke finde noget betydeligt natteliv medmindre du rejser til Albuquerque eller Santa Fe.",
+  "target_text": "Given how remote many of the pueblos are, you won't be able to find a significant amount of nightlife without traveling to Albuquerque or Santa Fe."
+}
+```
+
+```json
+{
+  "text": "For eksempel vil børn, der identificeres med en raceminoritet, der stereotypt opfattes som klarende sig dårligt i skolen, klarer sig dårligt i skolen, når de lærer om den stereotyp, der er associeret med deres race.",
+  "target_text": "For instance, children who identify with a racial minority that is stereotyped as not doing well in school tend to not do well in school once they learn about the stereotype associated with their race."
+}
+```
+
+```json
+{
+  "text": "Det er komprimeret sne med sprækker, der er fyldt og markeret med flag. Det eneste, der kan bevæge sig på den, er specialiserede traktorer, der trækker slæder med brændstof og forsyninger.",
+  "target_text": "It's compacted snow with crevasses filled in and marked by flags. It can only be traveled by specialized tractors, hauling sleds with fuel and supplies."
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 5
+- Prefix prompt:
+
+  ```text
+  Nedenfor er danske tekster med tilhørende English oversættelser.
+  ```
+
+- Base prompt template:
+
+  ```text
+  Dansk tekst: {text}
+  English oversættelse: {target_text}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  Dansk tekst: {text}
+
+  Oversæt den ovenstående tekst til English.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset flores-da-en
 ```

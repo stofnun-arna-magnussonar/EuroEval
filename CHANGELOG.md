@@ -7,10 +7,107 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v18.2.0] - 2026-09-29
+
 ### Added
 
+- Added Laya zero-shot classifier support through the `laya` extra and
+  `ModelType.ZERO_SHOT_CLASSIFIER`, including bundled and standalone checkpoints,
+  `model_id#param` variants, local models, and configured device/cache handling. This
+  was contributed by @mathiasesn ✨
+- Added the `contamination-detection` task for collecting experimental private
+  contamination-canary evidence. It uses a virtual dataset configuration, is included
+  automatically in suite, ordinary task, and language runs without `--dataset`, and is
+  omitted from targeted dataset selections. Explicit task selection remains supported
+  without duplicating the virtual dataset. Existing result identities and evidence
+  schema are preserved; there is no bespoke canary flag. The private corpus is fetched
+  with EuroEval's packaged, obfuscated dataset credential, and evidence is interpreted
+  only during private leaderboard processing.
+- Added a `--num-parameters` CLI option and matching `num_parameters` Python argument
+  for overriding model parameter counts when they cannot be inferred automatically.
+- Added support for DeepSeek-V4.1-Flash via the DeepSeek API (`deepseek/deepseek-flash`),
+  including model metadata and the `#no-thinking`, `#thinking`, `#low`, `#high` and
+  `#max` parameters to control its thinking mode. `#no-thinking` and `#thinking` send
+  `thinking.type: disabled`/`enabled` respectively, while `#low`, `#high` and `#max`
+  set DeepSeek's `reasoning_effort` and leave thinking on. Since thinking is enabled by
+  default, the bare model ID is treated as a reasoning model. The `deepseek/` prefix is
+  required, so that open-weight deployments of DeepSeek models (e.g. via vLLM, Ollama
+  or OpenRouter) are not treated as the DeepSeek API and thus don't get its
+  DeepSeek-API-specific parameter shaping. This was contributed by @mathiasesn ✨
+
+### Changed
+
+- DeepSeek API model IDs now use the `deepseek/` provider prefix without being
+  rewritten for custom API endpoints, and all such models link to DeepSeek's pricing
+  documentation on generated leaderboards.
+- Generative benchmarking now defaults to automatic shot selection: local
+  instruction-tuned and reasoning models run zero-shot and few-shot evaluations, base
+  models run few-shot, and API-backed models run zero-shot. The explicit `--few-shot`
+  and `--zero-shot` flags remain available as single-mode overrides.
+- Known parameter adjustments are now applied before and after the internal
+  test request in the LiteLLM module, so a new dataset no longer re-triggers
+  known errors and the returned kwargs are always consistent. This was contributed by
+  @mathiasesn ✨
+
+### Fixed
+
+- LiteLLM contamination-canary collection now probes API capabilities with one request,
+  preserves the six-token output bound across token-limit fallbacks and reused-model
+  parameter adjustments, and reports collection status and failure reasons without
+  aborting ordinary benchmarks.
+- Encoder contamination-canary runs now emit the required not-applicable evidence
+  without loading the virtual text-to-text task, while preserving model metadata in
+  standalone and mixed runs.
+- LiteLLM generation now records model-level parameter adjustments learned by the
+  error handlers (e.g. "no JSON schema" or "use `max_tokens`") as a set of
+  `ParameterAdjustment` capabilities and re-applies them conditionally to the
+  freshly built kwargs of every batch and dataset, instead of rebuilding the kwargs
+  from scratch and re-triggering the same error. Each adjustment only touches
+  parameters that are actually present, so one dataset's
+  `max_completion_tokens`/`response_format` never leaks into another after
+  `update_dataset_config()`. Service errors and transient messages (such as the
+  temporary logprobs quota message) are never persisted. Disabling logprobs no
+  longer removes `response_format` from later datasets, and error messages that
+  complain about a specific schema or request (e.g. a malformed JSON schema, a
+  `maxItems` constraint or empty outputs) are only handled for the current request
+  rather than persisted as model-wide capabilities. This was contributed by
+  @mathiasesn ✨
+- The `NO_TOP_LOGPROBS` parameter adjustment is now applied before the
+  `LOGPROBS_MUST_BE_BOOLEAN` one, so that a model with both adjustments no longer
+  sends an invalid integer `logprobs` value to the provider on the first application.
+  This was contributed by @mathiasesn ✨
+- The LiteLLM module now recognises the DeepSeek API's "This response_format type is
+  unavailable now" error and falls back from JSON schemas to plain JSON output. This
+  was contributed by @mathiasesn ✨
+- First-label-token mapping for chat models now isolates label tokens via a chat-template
+  diff (with encode-label fallback) instead of scanning the full templated conversation.
+  This prevents system-prompt tokens such as ``p`` / ``n`` from being mistaken for
+  classification label prefixes (e.g. ``positif`` → ``p``). This was contributed by
+  @djstrong ✨
+- Suppressed a harmless vLLM Metal tokeniser compatibility warning during startup when
+  the optional vLLM tokeniser registry is unavailable.
+- vLLM text-only evaluations no longer initialise multimodal processors just to
+  resolve a chat template, avoiding spurious Transformers processor validation errors.
+- LiteLLM now retries custom OpenAI-compatible APIs that reject `max_tokens` without
+  sending the unsupported parameter.
+- Classification label-token cleanup now preserves Unicode letters while removing
+  tokenizer markers and punctuation at token edges.
+
+## [v18.1.0] - 2026-09-11
+
+### Added
+
+- Datasets from Hugging Face repositories with an `eval.yaml` declaring several
+  configurations now expand into one benchmark per task entry, so `--dataset repo`
+  evaluates all of them instead of loading a single one, `--dataset repo::split`
+  narrows the run down to one split across all configurations, and
+  `--dataset repo::config::split` names a single subset. Configurations are no longer
+  selected with `--language`, which now conflicts with `--dataset` in the same way
+  `--task` does.
 - Added model release dates to benchmark result metadata for Hugging Face Hub and API
   models.
+- Added release-date metadata for GPT-6 Astra, Claude Fable 5.1, Claude Mythos 5.1,
+  and Gemini 3.8 Flash.
 - Added the unofficial Belarusian Word-in-Context dataset `bewic`, based on the BeWiC
   dataset from BelarusianGLUE.
 - Added the unofficial Belarusian linguistic acceptability dataset `belacola`, based on
@@ -18,6 +115,17 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 - Added five unofficial Slovak datasets derived from SKLEP: SKLEP NLI, SKLEP RTE,
   SK-QuAD, WikiGoldSK and Reviews3.
 - Added the unofficial Belarusian BeRTE-WD binary natural language inference dataset.
+- Added support for Inspect AI `eval.yaml` files using the `math` scorer, which are
+  now loaded as the `math` task with exact-match scoring of the `\boxed{...}` answer.
+  Answers are compared as mathematical values, so `\frac{1}{2}` matches `0.5` and `2\pi`
+  matches `6.283185307179586`; this evaluates with SymPy, which is declared as a
+  dependency but is already installed through torch. Templates from `prompt_template`
+  solvers are used as EuroEval instruction prompts.
+  An answer boxed as an equation, such as `\boxed{x = 5}`, scores the value it names.
+- Added the unofficial Danish knowledge dataset `danish-similarity-outlier`, part of the
+  [Danish Semantic Reasoning Benchmark](https://github.com/kuhumcst/danish-semantic-reasoning-benchmark),
+  where the model has to pick the semantically least similar word from six options. This
+  was contributed by @Mr-Neutr0n ✨
 
 ### Changed
 
@@ -27,11 +135,29 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fixed RobBERT-family question-answering predictions losing the first character of
+  word-initial answers because of their tokeniser offset mappings. This was
+  contributed by @jaideeppyne ✨
+- Restored backwards-compatible `Language(code, name)` construction while retaining
+  ISO 639-3 and optional ISO 639-1 language codes.
+- Fixed expanded `eval.yaml` task identities so entries without declared splits,
+  mixed configured and configless entries, and duplicate config/split entries remain
+  selectable and round-trip through `--dataset`.
+- Language-shaped configurations are now recognised independently of EuroEval support,
+  so unsupported language entries are skipped rather than attributed to repository
+  languages.
+- Fixed subset selectors being silently discarded when a dataset had only an
+  `euroeval_config.py`; subset selection now requires an `eval.yaml`.
+- Fixed malformed `eval.yaml` files being rejected without the YAML parse error being
+  logged.
 - If errors occured during evaluations that required zero-shot or test-set splits, then
   subsequent evaluations would also require that rather than reverting to the default
   few-shot and validation splits. This has been fixed.
 - Fixed leaderboard deduplication treating malformed model release dates as valid
   metadata.
+- Fixed model release dates being missing for most models: a rate-limited Hub request
+  was stored as "no release date" and never asked again, and models without a recorded
+  Hugging Face URL were looked up as API models, which do not know them.
 - Fixed Hugging Face Router model IDs being rewritten with an unwanted `openai/` prefix
   when using a custom API base.
 - Fixed an infinite loop in token-classification few-shot example selection when the
@@ -40,8 +166,15 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   `B-PER`).
 - Fixed `#no-thinking` LiteLLM evaluations when providers reject a zero thinking budget
   and require an explicit `thinking.type` of `disabled`.
+- An unsupported language code in the language metadata of a Hugging Face dataset
+  repository, such as `zh`, no longer blocks the rest of its `eval.yaml` from loading.
 - The logical-reasoning task is now restricted to instruction-tuned and
   reasoning models, excluding base models.
+- Combining `--dataset` with `--task` or `--language` now results in a CLI usage error
+  rather than an unhandled `ValueError` traceback. The options are mutually exclusive,
+  as `--dataset` fully specifies which datasets, configurations and splits to benchmark.
+- Math scoring now safely bounds chained assignments and handles decimal overflow in
+  adversarial predictions.
 
 ## [v18.0.0] - 2026-08-14
 
@@ -93,6 +226,29 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   [IMISLab/CulturaQA](https://huggingface.co/datasets/IMISLab/CulturaQA), using
   translation-style text-to-text metrics with original split boundaries preserved and
   split sizes 1,024 / 200 / 500.
+- Added bidirectional WMT24++ translation datasets for 25 non-English languages
+  (Bulgarian, Catalan, Croatian, Czech, Danish, Dutch, Estonian, Finnish, French,
+  German, Greek, Hungarian, Icelandic, Italian, Latvian, Lithuanian, Norwegian, Polish,
+  Portuguese, Romanian, Serbian, Slovak, Slovene, Swedish, Ukrainian). Each language now
+  has both `wmt24pp-en-{code}` and `wmt24pp-{code}-en` datasets: English-to-local
+  datasets are official, while local-to-English datasets are unofficial.
+- Added bidirectional FLORES+ translation datasets for all official languages, built
+  from the multi-way parallel professional-translation benchmark
+  [openlanguagedata/flores_plus](https://huggingface.co/datasets/openlanguagedata/flores_plus).
+  Each language has both `flores-en-{code}` and `flores-{code}-en` datasets, with the
+  train/validation splits drawn from the FLORES+ `dev` split and the test split from
+  `devtest` (128 / 256 / up to 1,024 samples). The English-to-local datasets are
+  official, while the local-to-English datasets are unofficial. This applies to both
+  the six languages not covered by WMT24++ and the 25 WMT24++ languages.
+- Added translation prompt templates for Belarusian, Faroese and Luxembourgish as source
+  languages, so that all official languages now have translation prompt templates.
+- Added a transliteration engine (`euroeval.transliteration`) and a `multiple_scripts`
+  boolean on the `Language` object. When a translation dataset targets a language written
+  in multiple scripts (e.g. Serbian, written in both Cyrillic and Latin), the ChrF
+  metrics now transliterate both predictions and references to a single canonical script
+  before scoring, so a correct translation is no longer penalised for choosing a valid
+  script that differs from the reference's. This uses the `cyrtranslit` package and
+  currently covers Serbian and Bosnian.
 - Added zebra-puzzle logical-reasoning datasets (`zebra-puzzles-easy-*` and
   `zebra-puzzles-hard-*`) for Basque, Western Frisian, Irish, Macedonian, Russian and
   Scots.
@@ -144,8 +300,23 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     - `mmlu-sv` → `skolprov`, `swedish-facts`
   - Ukrainian: `global-mmlu-uk` → `include-uk`
 
+### Removed
+
+- Removed the language-identification penalty from the ChrF metrics, along with the
+  `lingua-language-detector` dependency and the `metrics.language_detection` module. The
+  penalty was a holdover from when translation was scored with BERTScore (embedding-based,
+  so it could reward correct content written in the wrong language); with character-based
+  ChrF a wrong-language output already scores low on its own. In practice the penalty was
+  wrongly zeroing large fractions of correct references (e.g. ~58% of gold Croatian and
+  ~24% of gold English), depressing valid scores far more than it caught genuine errors.
+
 ### Fixed
 
+- Fixed the prompt script for Serbian datasets whose content is written in Cyrillic. The
+  `include-sr` knowledge dataset now uses a Cyrillic prompt (overriding the shared Latin
+  knowledge template still used by the Latin-script `mmlu-sr`, `mms-sr` and
+  `winogrande-sr`), and the Serbian-source translation prompt template is now Cyrillic to
+  match the Cyrillic source text of `wmt24pp-sr-en`.
 - Fixed `_load_model_from_pretrained` final error message for `KeyError`/`RuntimeError`
   after retry exhaustion. The raised `InvalidModel` now includes the model ID and
   exception repr (e.g. `The model 'EuroBERT/EuroBERT-210m' could not be loaded. The
