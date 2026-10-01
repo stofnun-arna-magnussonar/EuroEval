@@ -18,6 +18,7 @@ from .prompt_templates import (
     RC_TEMPLATES,
     SENT_TEMPLATES,
     SIMPL_TEMPLATES,
+    SPELL_TEMPLATES,
     SUMM_TEMPLATES,
     TOKEN_CLASSIFICATION_TEMPLATES,
     TRANSLATION_TEMPLATES,
@@ -268,6 +269,22 @@ TOOL_CALLING = Task(
     requires_zero_shot=True,
     uses_structured_output=True,
     structured_output_format=ToolCallingResponse,
+)
+
+SPELL = Task(
+    name="spelling-standardisation",
+    task_group=TaskGroup.TEXT_TO_TEXT,
+    template_dict=SPELL_TEMPLATES,
+    metrics=[m.reference_containment_metric, m.exact_match_metric],
+    default_num_few_shot_examples=0,
+    default_max_generated_tokens=256,
+    default_labels=[],
+    default_allowed_model_types=[ModelType.GENERATIVE],
+    default_allowed_generative_types=[
+        GenerativeType.INSTRUCTION_TUNED,
+        GenerativeType.REASONING,
+    ],
+    requires_zero_shot=True,
 )
 
 # Orthogonal tasks, which measures things not related to 'raw' language modelling

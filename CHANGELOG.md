@@ -7,6 +7,18 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added the zero-shot `spelling-standardisation` task, in which instruction-tuned and
+  reasoning models have to write out a sentence in accordance with the official
+  spelling rules, correcting it if needed. It is evaluated with the new reference
+  containment metric, being the share of outputs containing the reference sentence
+  (falling back to exact match when the reference already occurs in the input), with
+  exact match as a secondary metric.
+- Added the unofficial Icelandic spelling standardisation dataset IceStaBS2
+  (`icestabs2`), based on the official Icelandic spelling rules from the Árni Magnússon
+  Institute for Icelandic Studies.
+
 ## [v18.2.0] - 2026-09-29
 
 ### Added

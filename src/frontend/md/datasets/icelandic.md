@@ -2144,3 +2144,64 @@ You can evaluate this dataset directly as follows:
 ```bash
 euroeval --model <model-id> --dataset flores-is-en
 ```
+
+## Spelling Standardisation
+
+### Unofficial: IceStaBS2
+
+This dataset was created by the [Árni Magnússon Institute for Icelandic
+Studies](https://www.arnastofnun.is) and is based on the official [Icelandic spelling
+rules](https://ritreglur.arnastofnun.is). Each sample is a sentence which breaks one of
+the rules, such as the use of capital letters, compound words, hyphens or commas, along
+with its standardised version. The dataset covers 246 rules with three sentences per
+rule.
+
+The dataset consists of 738 samples, all of which are used for testing, as the dataset is
+only used for zero-shot evaluation.
+
+Here are a few examples from the test split:
+
+```json
+{
+  "text": "Jón fór út. hann sá blóm.",
+  "target_text": "Jón fór út. Hann sá blóm.",
+  "top_level_key": "1.2.1 (a)",
+  "error_code": "lower4upper-initial"
+}
+```
+
+```json
+{
+  "text": "Eftir lifandi eiginkona Jóns heitir Sigríður.",
+  "target_text": "Eftirlifandi eiginkona Jóns heitir Sigríður.",
+  "top_level_key": "2.3 (b)",
+  "error_code": "split-word/split-words"
+}
+```
+
+```json
+{
+  "text": "Hún starði opinmynnt á mig og sagði svo: „ég get þetta ekki.“",
+  "target_text": "Hún starði opinmynnt á mig og sagði svo: „Ég get þetta ekki.“",
+  "top_level_key": "29.4 (a)",
+  "error_code": "lower4upper-initial"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 0
+- Instruction-tuned prompt template:
+
+  ```text
+  Setning: {text}
+
+  Hugsanlega er villa í stafsetningu eða greinarmerkjasetningu í setningunni hér að ofan, en ekki er víst að svo sé. Skrifaðu setninguna í samræmi við íslenskar ritreglur, leiðrétta ef þörf krefur, og ekkert annað.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset icestabs2
+```

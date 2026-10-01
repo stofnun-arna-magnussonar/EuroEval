@@ -15,6 +15,7 @@ from ..tasks import (
     NER,
     RC,
     SENT,
+    SPELL,
     SUMM,
     TRANSLATION,
 )
@@ -293,6 +294,20 @@ GERLANGMOD_IS_CONFIG = DatasetConfig(
     source="EuroEval/gerlangmod-is",
     task=GED,
     languages=[ICELANDIC],
+    unofficial=True,
+)
+
+# Each sentence breaks one rule from the official Icelandic spelling rules
+# (https://ritreglur.arnastofnun.is), with three sentences per rule. The dataset only
+# has a test split, as it is meant for zero-shot evaluation only.
+ICESTABS2_CONFIG = DatasetConfig(
+    name="icestabs2",
+    pretty_name="IceStaBS2",
+    source="arnastofnun/icestabs2",
+    task=SPELL,
+    languages=[ICELANDIC],
+    train_split=None,
+    val_split=None,
     unofficial=True,
 )
 
