@@ -97,6 +97,12 @@ checkpoint-*
 .euroeval_cache/
 .euroeval_cache-*/
 
+# Result log
+scandeval_benchmark_results.jsonl
+/euroeval_benchmark_results.jsonl
+
+# Leaderboard generation inputs (large, kept off-repo; see src/leaderboards/paths.py)
+=======
 # Result logs and leaderboard generation inputs (see src/leaderboards/paths.py)
 **/*_results.jsonl
 results.tar.gz
@@ -172,6 +178,7 @@ data/
 # Slopo code duplication detection
 .slopo/*
 !.slopo/slopo.ignore.txt
+venv
 
 # Backups
 *.bak

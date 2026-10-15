@@ -15,6 +15,7 @@ from .nli import NLI_TEMPLATES
 from .reading_comprehension import RC_TEMPLATES
 from .sentiment_classification import SENT_TEMPLATES
 from .simplification import SIMPL_TEMPLATES
+from .spelling_standardisation import SPELL_TEMPLATES
 from .summarization import SUMM_TEMPLATES
 from .token_classification import TOKEN_CLASSIFICATION_TEMPLATES
 from .translation import TRANSLATION_TEMPLATES

@@ -54,6 +54,7 @@ this category are:
 11. [Grammatical Error Correction](/tasks/grammatical-error-correction)
 12. [Tool Calling](/tasks/tool-calling)
 13. [Translation](/tasks/translation)
+14. [Spelling Standardisation](/tasks/spelling-standardisation)
 
 ### Other
 

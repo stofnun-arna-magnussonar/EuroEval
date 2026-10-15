@@ -10,11 +10,13 @@ from ..tasks import (
     INSTRUCTION_FOLLOWING,
     KNOW,
     LA,
+    LA_ZERO_SHOT,
     LOGIC,
     MCRC,
     NER,
     RC,
     SENT,
+    SPELL,
     SUMM,
     TOOL_CALLING,
     TRANSLATION,
@@ -201,6 +203,30 @@ ICE_LINGUISTIC_CONFIG = DatasetConfig(
     unofficial=True,
 )
 
+# Unlike `ice-linguistic`, this keeps the benchmark's own Icelandic prompts verbatim
+# instead of extracting the bare sentence. The grammaticality and compound-word items
+# exist in two polarities ("er setningin málfræðilega rétt?" / "... röng?"), which the
+# benchmark authors added to control for yes/no response bias; extracting the sentence
+# collapses the two into duplicate rows and discards that control. Passing the prompt
+# through keeps them as distinct items with opposite correct answers, so a model that
+# always answers "já" scores an MCC near zero. The dataset only has a test split, since
+# it is evaluated zero-shot only, matching the paper.
+ICE_LINGUISTIC_IS_CONFIG = DatasetConfig(
+    name="ice-linguistic-is",
+    pretty_name="IceLinguistic-is",
+    source="arnastofnun/ice-linguistic-is",
+    task=LA_ZERO_SHOT,
+    languages=[ICELANDIC],
+    unofficial=True,
+    train_split=None,
+    val_split=None,
+    labels=["já", "nei"],
+    prompt_label_mapping="auto",
+    prompt_prefix="Eftirfarandi eru spurningar um íslenska málfræði ásamt svörum.",
+    prompt_template="{text}\nSvar: {label}",
+    instruction_prompt="{text}",
+)
+
 ICELANDIC_QA_CONFIG = DatasetConfig(
     name="icelandic-qa",
     pretty_name="Icelandic QA",
@@ -281,6 +307,20 @@ GERLANGMOD_IS_CONFIG = DatasetConfig(
     source="EuroEval/gerlangmod-is",
     task=GED,
     languages=[ICELANDIC],
+    unofficial=True,
+)
+
+# Each sentence breaks one rule from the official Icelandic spelling rules
+# (https://ritreglur.arnastofnun.is), with three sentences per rule. The dataset only
+# has a test split, as it is meant for zero-shot evaluation only.
+ICESTABS2_CONFIG = DatasetConfig(
+    name="icestabs2",
+    pretty_name="IceStaBS2",
+    source="arnastofnun/icestabs2",
+    task=SPELL,
+    languages=[ICELANDIC],
+    train_split=None,
+    val_split=None,
     unofficial=True,
 )
 

@@ -368,6 +368,100 @@ You can evaluate this dataset directly as follows:
 euroeval --model <model-id> --dataset ice-linguistic
 ```
 
+### Unofficial: IceLinguistic-is
+
+This is a second build of the same source benchmark, described in
+[this paper](https://aclanthology.org/2025.nodalida-1.5/), differing from `ice-linguistic`
+in three respects.
+
+First, it uses the Icelandic-prompt edition of the benchmark and passes each item's
+prompt through verbatim, rather than extracting the bare sentence and wrapping it in
+EuroEval's generic linguistic-acceptability template. The grammaticality and
+compound-word items in the source exist in two polarities — *"Er eftirfarandi setning
+málfræðilega **rétt** á íslensku?"* and *"... **röng** ...?"* — which the benchmark
+authors added specifically to control for yes/no response bias (paper §3.1). Extracting
+the sentence collapses the two into duplicate rows and discards that control; keeping
+the prompt makes them distinct items with opposite correct answers, so a model that
+always answers `já` scores an MCC near zero.
+
+Second, it is evaluated zero-shot only, as in the paper. Variants of the same phenomenon
+instance, such as both members of a minimal pair and both polarities of each, are
+near-identical, so any few-shot pool drawn from the same items would leak test answers.
+
+Third, it covers all the yes/no methods of the benchmark — sentence grammaticality (532
+items), compound-noun well-formedness (280 items) and word sense (150 items) — rather
+than a length-filtered subset of the first.
+
+Of the 1,160 items in the source, the 962 with `já`/`nei` answers are used; the remainder
+are free-text methods (fill-in-the-blank, fragment answering and question answering) that
+cannot be scored as a classification task. All 962 items are used for testing, of which
+456 have the answer `já` and 506 the answer `nei`.
+
+Here are a few examples from the test split:
+
+```json
+{
+  "text": "Er eftirfarandi setning málfræðilega rétt á íslensku?\n\n Aron er hávaxinn hetja. \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+```json
+{
+  "text": "Er eftirfarandi setning málfræðilega röng á íslensku?\n\n Hvaða kennari telur að Guðrún hafi skemmt bílinn? \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+```json
+{
+  "text": "Er eftirfarandi samsett orð á íslensku rétt myndað?\n\n gleraugumheppni \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "nei"
+}
+```
+
+```json
+{
+  "text": "Er orðið sem er merkt með <i></i> í eftirfarandi tveimur setningum á íslensku sömu merkingar?\n\n 1) Krakkarnir <i>lituðu</i> allir í litabókina. 2) Krakkarnir <i>lituðu</i> allir í leikskólanum. \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "já"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 0
+- Prefix prompt:
+
+  ```text
+  Eftirfarandi eru spurningar um íslenska málfræði ásamt svörum.
+  ```
+
+- Base prompt template:
+
+  ```text
+  {text}
+  Svar: {label}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  {text}
+  ```
+
+  I.e., the benchmark's own prompt is used directly, with no additional instruction.
+
+- Label mapping:
+  - `já` ➡️ `já`
+  - `nei` ➡️ `nei`
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset ice-linguistic-is
+```
+
 ## Reading Comprehension
 
 ### NQiI
@@ -2187,4 +2281,65 @@ You can evaluate this dataset directly as follows:
 
 ```bash
 euroeval --model <model-id> --dataset multi-bfcl-is
+```
+
+## Spelling Standardisation
+
+### Unofficial: IceStaBS2
+
+This dataset was created by the [Árni Magnússon Institute for Icelandic
+Studies](https://www.arnastofnun.is) and is based on the official [Icelandic spelling
+rules](https://ritreglur.arnastofnun.is). Each sample is a sentence which breaks one of
+the rules, such as the use of capital letters, compound words, hyphens or commas, along
+with its standardised version. The dataset covers 246 rules with three sentences per
+rule.
+
+The dataset consists of 738 samples, all of which are used for testing, as the dataset is
+only used for zero-shot evaluation.
+
+Here are a few examples from the test split:
+
+```json
+{
+  "text": "Jón fór út. hann sá blóm.",
+  "target_text": "Jón fór út. Hann sá blóm.",
+  "top_level_key": "1.2.1 (a)",
+  "error_code": "lower4upper-initial"
+}
+```
+
+```json
+{
+  "text": "Eftir lifandi eiginkona Jóns heitir Sigríður.",
+  "target_text": "Eftirlifandi eiginkona Jóns heitir Sigríður.",
+  "top_level_key": "2.3 (b)",
+  "error_code": "split-word/split-words"
+}
+```
+
+```json
+{
+  "text": "Hún starði opinmynnt á mig og sagði svo: „ég get þetta ekki.“",
+  "target_text": "Hún starði opinmynnt á mig og sagði svo: „Ég get þetta ekki.“",
+  "top_level_key": "29.4 (a)",
+  "error_code": "lower4upper-initial"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 0
+- Instruction-tuned prompt template:
+
+  ```text
+  Setning: {text}
+
+  Hugsanlega er villa í stafsetningu eða greinarmerkjasetningu í setningunni hér að ofan, en ekki er víst að svo sé. Skrifaðu setninguna í samræmi við íslenskar ritreglur, leiðrétta ef þörf krefur, og ekkert annað.
+  ```
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset icestabs2
 ```

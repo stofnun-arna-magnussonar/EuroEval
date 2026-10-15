@@ -1,0 +1,964 @@
+{
+    "gpt-5.4": {
+        "name": {
+            "is": "gpt-5.4",
+            "en": "gpt-5.4"
+        },
+        "tableName": {
+            "is": "GPT 5.4",
+            "en": "GPT 5.4"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.756,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.923,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.649,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.849,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gpt-5.6-sol": {
+        "name": {
+            "is": "gpt-5.6-sol",
+            "en": "gpt-5.6-sol"
+        },
+        "tableName": {
+            "is": "GPT 5.6 Sol",
+            "en": "GPT 5.6 Sol"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.975,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.944,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.604,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.939,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gpt-5.6-terra": {
+        "name": {
+            "is": "gpt-5.6-terra",
+            "en": "gpt-5.6-terra"
+        },
+        "tableName": {
+            "is": "GPT 5.6 Terra",
+            "en": "GPT 5.6 Terra"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.974,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.934,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.623,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.885,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gpt-5.6-luna": {
+        "name": {
+            "is": "gpt-5.6-luna",
+            "en": "gpt-5.6-luna"
+        },
+        "tableName": {
+            "is": "GPT 5.6 Luna",
+            "en": "GPT 5.6 Luna"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.893,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.918,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.533,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.778,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gpt-oss-120B": {
+        "name": {
+            "is": "gpt-oss-120B",
+            "en": "gpt-oss-120B"
+        },
+        "tableName": {
+            "is": "GPT OSS 120B",
+            "en": "GPT OSS 120B"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "openai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.655,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.863,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.538,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.737,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "claude-fable-5": {
+        "name": {
+            "is": "claude-fable-5",
+            "en": "claude-fable-5"
+        },
+        "tableName": {
+            "is": "Claude Fable 5",
+            "en": "Claude Fable 5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "anthropic",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.591,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.948,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.636,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.951,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "claude-opus-5": {
+        "name": {
+            "is": "claude-opus-5",
+            "en": "claude-opus-5"
+        },
+        "tableName": {
+            "is": "Claude Opus 5",
+            "en": "Claude Opus 5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "anthropic",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.354,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.955,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.656,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.962,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "claude-sonnet-5": {
+        "name": {
+            "is": "claude-sonnet-5",
+            "en": "claude-sonnet-5"
+        },
+        "tableName": {
+            "is": "Claude Sonnet 5",
+            "en": "Claude Sonnet 5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "anthropic",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.708,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.932,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.643,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.905,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "claude-haiku-4-5": {
+        "name": {
+            "is": "claude-haiku-4-5",
+            "en": "claude-haiku-4-5"
+        },
+        "tableName": {
+            "is": "Claude Haiku 4.5",
+            "en": "Claude Haiku 4.5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "anthropic",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.55,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.871,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.55,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.677,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "grok-4.5": {
+        "name": {
+            "is": "grok-4.5",
+            "en": "grok-4.5"
+        },
+        "tableName": {
+            "is": "Grok 4.5",
+            "en": "Grok 4.5"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "spacexai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.944,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.944,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.617,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.935,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "grok-4-1-fast-reasoning": {
+        "name": {
+            "is": "grok-4-1-fast-reasoning",
+            "en": "grok-4-1-fast-reasoning"
+        },
+        "tableName": {
+            "is": "Grok 4.1 Fast Reasoning",
+            "en": "Grok 4.1 Fast Reasoning"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "spacexai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.92,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.936,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.617,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.91,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "grok-4-fast-reasoning": {
+        "name": {
+            "is": "grok-4-fast-reasoning",
+            "en": "grok-4-fast-reasoning"
+        },
+        "tableName": {
+            "is": "Grok 4 Fast Reasoning",
+            "en": "Grok 4 Fast Reasoning"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "spacexai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.892,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.93,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.606,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.903,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "Kimi-K3": {
+        "name": {
+            "is": "Kimi-K3",
+            "en": "Kimi-K3"
+        },
+        "tableName": {
+            "is": "Kimi K3",
+            "en": "Kimi K3"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "moonshotai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.626,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.936,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.633,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.914,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "GLM-5.2": {
+        "name": {
+            "is": "GLM-5.2",
+            "en": "GLM-5.2"
+        },
+        "tableName": {
+            "is": "GLM 5.2",
+            "en": "GLM 5.2"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "zai",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.886,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.925,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.592,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.918,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "Qwen3.8-2.4T-A95B": {
+        "name": {
+            "is": "Qwen3.8-2.4T-A95B",
+            "en": "Qwen3.8-2.4T-A95B"
+        },
+        "tableName": {
+            "is": "Qwen3.8 2.4T A95B",
+            "en": "Qwen3.8 2.4T A95B"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "qwen",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.884,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.921,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.593,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.92,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "DeepSeek-V4-Pro": {
+        "name": {
+            "is": "DeepSeek-V4-Pro",
+            "en": "DeepSeek-V4-Pro"
+        },
+        "tableName": {
+            "is": "DeepSeek V4 Pro",
+            "en": "DeepSeek V4 Pro"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "deepseek",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.951,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.921,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.638,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.925,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "DeepSeek-V4-Flash-0731": {
+        "name": {
+            "is": "DeepSeek-V4-Flash-0731",
+            "en": "DeepSeek-V4-Flash-0731"
+        },
+        "tableName": {
+            "is": "DeepSeek V4 Flash",
+            "en": "DeepSeek V4 Flash"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "deepseek",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.88,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.895,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.631,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.881,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemini-3.1-pro-preview": {
+        "name": {
+            "is": "gemini-3.1-pro-preview",
+            "en": "gemini-3.1-pro-preview"
+        },
+        "tableName": {
+            "is": "Gemini 3.1 Pro",
+            "en": "Gemini 3.1 Pro"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.996,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.949,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.641,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.959,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemini-3.6-flash": {
+        "name": {
+            "is": "gemini-3.6-flash",
+            "en": "gemini-3.6-flash"
+        },
+        "tableName": {
+            "is": "Gemini 3.6 Flash",
+            "en": "Gemini 3.6 Flash"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.995,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.935,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.626,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.947,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemini-3.5-flash": {
+        "name": {
+            "is": "gemini-3.5-flash",
+            "en": "gemini-3.5-flash"
+        },
+        "tableName": {
+            "is": "Gemini 3.5 Flash",
+            "en": "Gemini 3.5 Flash"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 1.0,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.947,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.623,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.956,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemini-3.5-flash-lite": {
+        "name": {
+            "is": "gemini-3.5-flash-lite",
+            "en": "gemini-3.5-flash-lite"
+        },
+        "tableName": {
+            "is": "Gemini 3.5 Flash Lite",
+            "en": "Gemini 3.5 Flash Lite"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.759,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.918,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.558,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.787,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemini-3.1-flash-lite": {
+        "name": {
+            "is": "gemini-3.1-flash-lite",
+            "en": "gemini-3.1-flash-lite"
+        },
+        "tableName": {
+            "is": "Gemini 3.1 Flash Lite",
+            "en": "Gemini 3.1 Flash Lite"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.83,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.913,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.641,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.828,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemma-4-31B-it": {
+        "name": {
+            "is": "gemma-4-31B-it",
+            "en": "gemma-4-31B-it"
+        },
+        "tableName": {
+            "is": "Gemma 4 31B",
+            "en": "Gemma 4 31B"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.915,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.932,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.615,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.924,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "gemma-3n-E4B-it": {
+        "name": {
+            "is": "gemma-3n-E4B-it",
+            "en": "gemma-3n-E4B-it"
+        },
+        "tableName": {
+            "is": "Gemma 3n E4B",
+            "en": "Gemma 3n E4B"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "google",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.518,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.786,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.567,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.568,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "Llama-3.3-70B-Instruct-Turbo": {
+        "name": {
+            "is": "Llama-3.3-70B-Instruct-Turbo",
+            "en": "Llama-3.3-70B-Instruct-Turbo"
+        },
+        "tableName": {
+            "is": "Llama 3.3 70B",
+            "en": "Llama 3.3 70B"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "meta",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.556,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.859,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.476,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.639,
+                "metric": "accuracy"
+            }
+        ]
+    },
+    "MiniMax-M3": {
+        "name": {
+            "is": "MiniMax-M3",
+            "en": "MiniMax-M3"
+        },
+        "tableName": {
+            "is": "MiniMax M3",
+            "en": "MiniMax M3"
+        },
+        "description": {
+            "is": "",
+            "en": ""
+        },
+        "modelGroup": "minimax",
+        "results": [
+            {
+                "benchmark": "iceling-is",
+                "score": 0.849,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "belebele-is",
+                "score": 0.903,
+                "metric": "accuracy"
+            },
+            {
+                "benchmark": "hotter-and-colder-sentiment",
+                "score": 0.627,
+                "metric": "macro_f1"
+            },
+            {
+                "benchmark": "winogrande-is",
+                "score": 0.865,
+                "metric": "accuracy"
+            }
+        ]
+    }
+}

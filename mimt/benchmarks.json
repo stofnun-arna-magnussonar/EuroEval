@@ -1,0 +1,66 @@
+{
+    "iceling-is": {
+        "datePublished": 2024,
+        "task": "linguistic_ability",
+        "name": {
+            "is": "Icelandic Linguistic Benchmark for LLMs",
+            "en": "Icelandic Linguistic Benchmark for LLMs"
+        },
+        "description": {
+            "is": "<div class='test-info-container'><div class='test-description'><p><p>Próf í almennri færni mállíkana á íslensku máli, t.d. hvort líkönin leggi rétt mat á orðaröð, greini rétt í sundur orð sem eru notuð í sömu merkingu og þau sem eru það ekki, myndi samsett orð og þátíð í takt við það sem búast mætti við hjá íslenskum málhöfum, o.s.frv. Einblínt er á þætti sem ættu að vera sameiginlegir öllum sem hafa íslensku að móðurmáli (frekar en t.d. hvort sé réttara að segja ‘hann langar’ eða ‘honum langar’).</p> <p>Spurningarnar eru alls 1160 og ýmist eru líkönin beðin um að leggja mat á setningar með ‘Já/Nei’ svörum eða svara með ákveðnu orði.</p></p> \n<p>Í þessari útgáfu prófsins eru fyrirmælin á íslensku.</p></div>\n<div class='example'><p class='example-header'>Dæmi:</p> <div class='example-subcontent'><p class='example-bold-text'>Er eftirfarandi setning málfræðilega rétt á íslensku?</p> <p class='example-regular-text'>Ég kaus Framsóknarflokkinn og þú Samfylkingarinnar.</p> <p class='example-bold-text'>Svaraðu aðeins með einu orði, já eða nei.</p></div></div></div>",
+            "en": "Tests language models’ general proficiency in Icelandic grammar, e.g. sensitivity to word order, word sense disambiguation, forming compound words and past tenses of verbs as native speakers can be assumed to do, etc. Focuses on features which native speakers of Icelandic should be in more or less complete agreement on (as opposed to questions on prescriptive grammar as taught in schools). Contains 1160 test items, where models are tasked with producing either ‘yes/no’ answers or snippets of Icelandic text. \nThis version of the test uses prompts in Icelandic.\nExample: Er eftirfarandi setning málfræðilega rétt á íslensku? Ég kaus Framsóknarflokkinn og þú Samfylkingarinnar. Svaraðu aðeins með einu orði, já eða nei."
+        },
+        "shortDescription": {
+            "is": "Próf í málskilningi og -kunnáttu á íslensku.",
+            "en": "Tests Icelandic language understanding and linguistic ability."
+        }
+    },
+    "belebele-is": {
+        "datePublished": 2023,
+        "task": "reading_comprehension",
+        "name": {
+            "is": "Belebele (IS)",
+            "en": "Belebele (IS)"
+        },
+        "description": {
+            "is": "<div class='test-info-container'><div class='test-description'><p>Lesskilningsspróf sem unnið var fyrir 122 tungumál, íslensku þar á meðal. Samanstendur af 900 stuttum textabútum, sem enda svo á spurningu um textann og fjórum valmöguleikum. Lagt er upp úr því að orða spurningarnar og svörin vandlega til þess að prófið sé ekki of auðvelt fyrir mállíkön en þó auðleyst af fólki.</p> <p>Íslensk útgáfa prófsins er, samkvæmt höfundum þess, þýdd af íslenskum málhöfum þó stöku dæmi beri þess merki að hafa verið vélþýdd.</p>\n<p>Í þessari útgáfu prófsins eru fyrirmælin á íslensku.</p></div> <div class='example'><p class='example-header'>Dæmi:</p> <div class='example-content'><div class='example-subcontent'><p class='example-bold-text'>Miðað við eftirfarandi texta, spurningu og svarmöguleika, veldu þann svarmöguleika (bókstaf) sem á best við:</p> <p class='example-regular-text'>Texti: Ma fæddist í Hong Kong og stundaði nám við háskólann í New York og lögfræði við Harvard-háskóla og var eitt sinn með „græna kortið\" og fasta búsetu í Bandaríkjunum. Hsieh gaf í skyn þegar kosningarnar fóru fram að Ma kynni að flýja land um leið og neyðarástand yrði. Hsieh sagði einnig að hinn myndfríði Ma hugaði frekar að stíl en innihaldi. Þrátt fyrir ásakanirnar vann Ma þægilegan sigur með það á stefnuskránni að auka tengsl við meginland Kína.</p></div> <div class='example-subcontent'><p class='example-bold-text'>Spurning: Í hvaða landi stundaði Ma laganám? <p class='example-regular-text'>Svarmöguleikar: (A) Bandaríkjunum (B) Kína (C) Ástralíu (D) Hong Kong</p></div></p></div></div></div>",
+            "en": "A reading comprehension benchmark for 122 languages, including Icelandic. The test contains 900 short pieces of text, followed by a question about the text and four possible answers. Care has been taken in order to construct both the questions and answers so that the benchmark is not too easily solvable by models but, at the same time, simple for human readers. The Icelandic version of Belebele is, according to the authors, manually translated by native speakers although examples have been found which indicate that they were machine-translated.\nThis version of the test uses prompts in Icelandic.\nExample: Miðað við eftirfarandi texta, spurningu og svarmöguleika, veldu þann svarmöguleika (bókstaf) sem á best við: Texti: Ma fæddist í Hong Kong og stundaði nám við háskólann í New York og lögfræði við Harvard-háskóla og var eitt sinn með „græna kortið\" og fasta búsetu í Bandaríkjunum. Hsieh gaf í skyn þegar kosningarnar fóru fram að Ma kynni að flýja land um leið og neyðarástand yrði. Hsieh sagði einnig að hinn myndfríði Ma hugaði frekar að stíl en innihaldi. Þrátt fyrir ásakanirnar vann Ma þægilegan sigur með það á stefnuskránni að auka tengsl við meginland Kína. Spurning: Í hvaða landi stundaði Ma laganám? Svarmöguleikar: (A) Bandaríkjunum (B) Kína (C) Ástralíu (D) Hong Kong"
+        },
+        "shortDescription": {
+            "is": "Próf í lesskilningi á íslensku.",
+            "en": "Tests reading comprehension in Icelandic."
+        }
+    },
+    "hotter-and-colder-sentiment": {
+        "datePublished": 2025,
+        "task": "reading_comprehension",
+        "name": {
+            "is": "Hotter and Colder",
+            "en": "Hotter and Colder"
+        },
+        "description": {
+            "is": "<div class='test-info-container'><div class='test-description'><p>Próf í lyndisgreiningu sem samanstendur af 2900 ummælum við bloggfærslur á íslensku. Líkönin eiga að merkja ummælin út frá því hvort þau eru jákvæð, neikvæð eða hlutlaus. Prófið nýtist t.d. fyrirtækjum til að mæla getu líkana til að flokka athugasemdir frá notendum en getur einnig veitt nokkra vísbendingu um almennan lesskilning á íslensku.</p> <p>Merkingarnar á dæmunum voru upphaflega framkvæmdar af mállíkani en hafa verið handyfirfarnar.</p> \n<p>Fyrirmælin eru á ensku.</p></div> <div class='example'>\n<p class='example-header'>Dæmi:</p> <div class='example-content'><div class='example-subcontent'><p class='example-bold-text'>Classify the sentiment of the following Icelandic text and output 0 if the sentiment is negative, 1 if it is neutral, and 2 if it is positive, and answer only with the correct digit:</p> <p class='example-regular-text'>Ég las  þessa grein sem Steini vísar á í síðustu athugasemd - hún er merkileg. Ég hvet ykkur til að lesa hana.</p></div></div></div></div>",
+            "en": "A test of models’ sentiment analysis capabilities, consisting of 2900 comments on an Icelandic blog forum. The models are tasked with labelling the comments are either positive, negative or neutral. The test may, for example, be of use to companies in order to assess how well a model can sort user comments online but can also give some sense of general natural language understanding in Icelandic. The labels in the test set were originally produced by a language model but have been manually reviewed. \nPrompts are in English. \nExample: Classify the sentiment of the following Icelandic text and output 0 if the sentiment is negative, 1 if it is neutral, and 2 if it is positive, and answer only with the correct digit: Ég las  þessa grein sem Steini vísar á í síðustu athugasemd - hún er merkileg. Ég hvet ykkur til að lesa hana."
+        },
+        "shortDescription": {
+            "is": "Próf í lyndisgreiningu á íslensku.",
+            "en": "Tests sentiment analysis in Icelandic."
+        }
+    },
+    "winogrande-is": {
+        "datePublished": 2024,
+        "task": "logical_reasoning",
+        "name": {
+            "is": "Winogrande (IS)",
+            "en": "Winogrande (IS)"
+        },
+        "description": {
+            "is": "<div class='test-info-container'><div class='test-description'><p>Próf í rökleiðslu sem samanstendur af 1095 spurningum.</p> <p>Þær eru allar með sama sniði: Fyrst kemur setning með eyðu í og líkönin eiga að velja hvort tveggja mögulegra orða eigi að standa í eyðunni. Bæði orðin geta staðið í setningunni út frá málfræðilegu sjónarmiði en annað er alltaf mun líklegra en hitt út frá merkingu.</p> <p>Prófið var upphaflega unnið á ensku en þessi útgáfa hefur verið þýdd á íslensku og staðfærð eftir þörfum.</p>\n<p>Í þessari útgáfu prófsins eru fyrirmælin á íslensku.</p></div>\n<div class='example'><p class='example-header'>Dæmi:</p> <div class='example-content'><div class='example-subcontent'><p class='example-bold-text'>Hér er íslensk setning með eyðu í og á eftir fara tveir valmöguleikar, (A) og (B), til að fylla í eyðuna. Svaraðu einungis með réttum bókstaf:</p> <p class='example-regular-text'>Kennararnir vildu reisa nýju skólabygginguna á lóðinni en _ var of stór.</p></div> <div class='example-subcontent'><p class='example-bold-text'>Svarmöguleikar:</p> <p class='example-regular-text'>(A) lóðin (B) skólabyggingin</p></div></div></div></div>",
+            "en": "A logical reasoning test containing 1095 test items. All are of the following form: A sentence with a blank, followed by two possible fillers that the models are tasked with choosing between. Both options are grammatically possible but one more semantically likely than the other. The test was originally constructed in English but this version has been manually translated into Icelandic and localized where necessary. \nThis version of the test uses prompts in Icelandic.\nExample:Hér er íslensk setning með eyðu í og á eftir fara tveir valmöguleikar, (A) og (B), til að fylla í eyðuna. Svaraðu einungis með réttum bókstaf: Kennararnir vildu reisa nýju skólabygginguna á lóðinni en _ var of stór. Svarmöguleikar: (A) lóðin (B) skólabyggingin"
+        },
+        "shortDescription": {
+            "is": "Próf í rökleiðslu á íslensku.",
+            "en": "Tests logical reasoning in Icelandic."
+        }
+    }
+}
