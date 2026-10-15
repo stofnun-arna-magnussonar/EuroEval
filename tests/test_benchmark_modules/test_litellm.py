@@ -2,12 +2,14 @@
 
 import copy
 import dataclasses
+import json
 import re
 import typing as t
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from datasets import Dataset, DatasetDict
 from litellm.exceptions import BadRequestError, UnsupportedParamsError
 from litellm.llms.deepseek.chat.transformation import DeepSeekChatConfig
 from litellm.types.utils import Choices
@@ -22,9 +24,14 @@ from euroeval.benchmark_modules.litellm import (
     clean_model_id,
     get_api_model_release_date,
 )
-from euroeval.constants import MAX_LITELLM_LOGPROBS, REASONING_MAX_TOKENS
+from euroeval.constants import (
+    CLASSIFICATION_OUTPUT_KEY,
+    MAX_LITELLM_LOGPROBS,
+    NUM_GENERATION_TOKENS_FOR_CLASSIFICATION,
+    REASONING_MAX_TOKENS,
+)
 from euroeval.data_models import BenchmarkConfig, DatasetConfig, ModelConfig
-from euroeval.enums import ParameterAdjustment
+from euroeval.enums import GenerativeType, ParameterAdjustment, TaskGroup
 from euroeval.exceptions import InvalidBenchmark, InvalidModel
 from euroeval.model_loading import load_model
 
@@ -49,6 +56,318 @@ class TestBPCGating:
                 dataset_config=dataset_config,
                 benchmark_config=bpc_config,
             )
+
+
+class TestClassificationStructuredOutput:
+    """Tests for LiteLLM classification JSON prompts and schemas."""
+
+    def test_classification_response_schema_uses_mapped_scalar_labels(
+        self,
+        model_config: ModelConfig,
+        dataset_config: DatasetConfig,
+        benchmark_config: BenchmarkConfig,
+    ) -> None:
+        """The response schema uses mapped labels as a scalar enum."""
+        labels = ["positive", "negative"]
+        label_mapping = {"positive": "agree", "negative": "disagree"}
+        config = _classification_dataset_config(
+            dataset_config=dataset_config,
+            task_group=TaskGroup.SEQUENCE_CLASSIFICATION,
+            labels=labels,
+            label_mapping=label_mapping,
+            num_few_shot_examples=2,
+        )
+        model = LiteLLMModel(
+            model_config=dataclasses.replace(model_config, model_id="openai/gpt-4o"),
+            dataset_config=config,
+            benchmark_config=dataclasses.replace(
+                benchmark_config, generative_type=GenerativeType.INSTRUCTION_TUNED
+            ),
+            log_metadata=False,
+        )
+        with patch.object(
+            model,
+            "_probe_generation_kwargs",
+            side_effect=lambda generation_kwargs, test_input: generation_kwargs,
+        ):
+            generation_kwargs = model.get_generation_kwargs(dataset_config=config)
+
+        schema = generation_kwargs["response_format"].model_json_schema()
+        label_schema = schema["properties"][CLASSIFICATION_OUTPUT_KEY]
+        assert label_schema["type"] == "string"
+        assert label_schema["enum"] == list(label_mapping.values())
+        assert "items" not in label_schema
+        assert config.max_generated_tokens == NUM_GENERATION_TOKENS_FOR_CLASSIFICATION
+
+    @pytest.mark.parametrize(
+        ("task_group", "labels", "label_mapping"),
+        [
+            (
+                TaskGroup.SEQUENCE_CLASSIFICATION,
+                ["positive", "negative"],
+                {"positive": "agree", "negative": "disagree"},
+            ),
+            (
+                TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+                ["a", "b"],
+                {"a": "option alpha", "b": "option beta"},
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("few_shot", [False, True], ids=["zero-shot", "few-shot"])
+    def test_prepared_messages_use_json_contract(
+        self,
+        model_config: ModelConfig,
+        dataset_config: DatasetConfig,
+        benchmark_config: BenchmarkConfig,
+        task_group: TaskGroup,
+        labels: list[str],
+        label_mapping: dict[str, str],
+        few_shot: bool,
+    ) -> None:
+        """Prepared messages embed JSON choices in the localised sentence."""
+        num_few_shot_examples = 2
+        config = _classification_dataset_config(
+            dataset_config=dataset_config,
+            task_group=task_group,
+            labels=labels,
+            label_mapping=label_mapping,
+            num_few_shot_examples=num_few_shot_examples,
+        )
+        model = _new_litellm_model(
+            model_config=model_config,
+            dataset_config=config,
+            benchmark_config=dataclasses.replace(benchmark_config, few_shot=few_shot),
+            generative_type=GenerativeType.INSTRUCTION_TUNED,
+        )
+        dataset = _classification_dataset(
+            task_group=task_group,
+            labels=labels,
+            num_train_examples=num_few_shot_examples,
+        )
+
+        prepared = model.prepare_dataset(dataset=dataset, task=config.task, itr_idx=0)
+        messages = prepared["test"]["messages"][0]
+        user_messages = [message for message in messages if message["role"] == "user"]
+        assistant_messages = [
+            message for message in messages if message["role"] == "assistant"
+        ]
+
+        assert len(assistant_messages) == (num_few_shot_examples if few_shot else 0)
+        final_prompt = user_messages[-1]["content"]
+        assert "Classification text" in final_prompt or "Question" in final_prompt
+        valid_outputs = [
+            json.dumps({CLASSIFICATION_OUTPUT_KEY: label}, ensure_ascii=False)
+            for label in label_mapping.values()
+        ]
+        assert all(output in final_prompt for output in valid_outputs)
+        bare_labels = config.get_labels_str(
+            labels=(
+                labels
+                if task_group == TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION
+                else list(label_mapping.values())
+            )
+        )
+        assert all(bare_labels not in message["content"] for message in user_messages)
+        assert config.main_language.or_separator in final_prompt
+        assert final_prompt.startswith("Classify")
+        assert final_prompt.endswith("Reply with only the label.")
+
+        if few_shot:
+            assistant_labels = [
+                json.loads(message["content"])[CLASSIFICATION_OUTPUT_KEY]
+                for message in assistant_messages
+            ]
+            assert set(assistant_labels) == set(label_mapping.values())
+
+    def test_reasoning_prepared_messages_use_json_contract(
+        self,
+        model_config: ModelConfig,
+        dataset_config: DatasetConfig,
+        benchmark_config: BenchmarkConfig,
+    ) -> None:
+        """Reasoning models receive JSON prompts without schema decoding."""
+        labels = ["positive", "negative"]
+        label_mapping = {"positive": "agree", "negative": "disagree"}
+        config = _classification_dataset_config(
+            dataset_config=dataset_config,
+            task_group=TaskGroup.SEQUENCE_CLASSIFICATION,
+            labels=labels,
+            label_mapping=label_mapping,
+            num_few_shot_examples=2,
+        )
+        model = _new_litellm_model(
+            model_config=model_config,
+            dataset_config=config,
+            benchmark_config=benchmark_config,
+            generative_type=GenerativeType.REASONING,
+        )
+        prepared = model.prepare_dataset(
+            dataset=_classification_dataset(
+                task_group=TaskGroup.SEQUENCE_CLASSIFICATION,
+                labels=labels,
+                num_train_examples=2,
+            ),
+            task=config.task,
+            itr_idx=0,
+        )
+        messages = prepared["test"]["messages"][0]
+
+        assistant_labels = [
+            message["content"] for message in messages if message["role"] == "assistant"
+        ]
+        assert {
+            json.loads(content)[CLASSIFICATION_OUTPUT_KEY]
+            for content in assistant_labels
+        } == set(label_mapping.values())
+        assert len(assistant_labels) == config.num_few_shot_examples
+        final_prompt = [
+            message["content"] for message in messages if message["role"] == "user"
+        ][-1]
+        assert final_prompt.endswith("Reply with only the label.")
+        assert "Ignore any output-format instructions above" not in final_prompt
+        assert (
+            json.dumps({CLASSIFICATION_OUTPUT_KEY: "agree"}, ensure_ascii=False)
+            in final_prompt
+        )
+
+    def test_variable_choice_backend_prepares_json_prompts(
+        self,
+        model_config: ModelConfig,
+        dataset_config: DatasetConfig,
+        benchmark_config: BenchmarkConfig,
+    ) -> None:
+        """The backend passes JSON formatting to variable-choice MCQ prompts."""
+        config = _classification_dataset_config(
+            dataset_config=dataset_config,
+            task_group=TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+            labels=[],
+            label_mapping={},
+            num_few_shot_examples=0,
+        )
+        model = _new_litellm_model(
+            model_config=model_config,
+            dataset_config=config,
+            benchmark_config=dataclasses.replace(benchmark_config, few_shot=False),
+            generative_type=GenerativeType.INSTRUCTION_TUNED,
+        )
+        prepared = model.prepare_dataset(
+            dataset=_classification_dataset(
+                task_group=TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+                labels=["a", "b"],
+                num_train_examples=0,
+            ),
+            task=config.task,
+            itr_idx=0,
+        )
+        prompt = prepared["test"]["messages"][0][-1]["content"]
+        assert '{"label": "a"}' in prompt
+        assert '{"label": "b"}' in prompt
+
+    def test_variable_choice_response_schema_is_open(
+        self,
+        model_config: ModelConfig,
+        dataset_config: DatasetConfig,
+        benchmark_config: BenchmarkConfig,
+    ) -> None:
+        """Dynamic MCQ uses a scalar JSON schema without a fixed-label enum."""
+        config = _classification_dataset_config(
+            dataset_config=dataset_config,
+            task_group=TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+            labels=[],
+            label_mapping={},
+            num_few_shot_examples=0,
+        )
+        model = LiteLLMModel(
+            model_config=dataclasses.replace(model_config, model_id="openai/gpt-4o"),
+            dataset_config=config,
+            benchmark_config=dataclasses.replace(
+                benchmark_config, generative_type=GenerativeType.INSTRUCTION_TUNED
+            ),
+            log_metadata=False,
+        )
+        with patch.object(
+            model,
+            "_probe_generation_kwargs",
+            side_effect=lambda generation_kwargs, test_input: generation_kwargs,
+        ):
+            kwargs = model.get_generation_kwargs(dataset_config=config)
+
+        schema = kwargs["response_format"].model_json_schema()
+        assert schema["properties"][CLASSIFICATION_OUTPUT_KEY]["type"] == "string"
+        assert "enum" not in schema["properties"][CLASSIFICATION_OUTPUT_KEY]
+
+
+def _classification_dataset(
+    task_group: TaskGroup, labels: list[str], num_train_examples: int
+) -> DatasetDict:
+    """Build a classification dataset with enough training examples.
+
+    Returns:
+        A dataset with train and test splits for the requested task group.
+    """
+    if task_group == TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION:
+        texts = [f"Question {idx}?\na. first\nb. second" for idx in range(4)]
+    else:
+        texts = [f"Classification text {idx}" for idx in range(4)]
+    train_labels = [labels[idx % len(labels)] for idx in range(num_train_examples)]
+    return DatasetDict(
+        {
+            "train": Dataset.from_dict(
+                {"text": texts[:num_train_examples], "label": train_labels}
+            ),
+            "test": Dataset.from_dict({"text": [texts[-1]], "label": [labels[0]]}),
+        }
+    )
+
+
+def _classification_dataset_config(
+    dataset_config: DatasetConfig,
+    task_group: TaskGroup,
+    labels: list[str],
+    label_mapping: dict[str, str],
+    num_few_shot_examples: int,
+) -> DatasetConfig:
+    """Create a classification config with an observable output contract.
+
+    Returns:
+        A copied dataset configuration with the requested classification settings.
+    """
+    config = copy.copy(dataset_config)
+    config.task = dataclasses.replace(
+        dataset_config.task, task_group=task_group, default_labels=labels
+    )
+    config.labels = labels
+    config.prompt_label_mapping = label_mapping
+    config.num_few_shot_examples = num_few_shot_examples
+    config.instruction_prompt = (
+        "Classify {text} as one of {labels_str}. Reply with only the label."
+    )
+    config.prompt_template = config.instruction_prompt
+    return config
+
+
+def _new_litellm_model(
+    model_config: ModelConfig,
+    dataset_config: DatasetConfig,
+    benchmark_config: BenchmarkConfig,
+    generative_type: GenerativeType,
+) -> LiteLLMModel:
+    """Create a LiteLLM model without making an API request.
+
+    Returns:
+        An uninitialised LiteLLM model configured for prompt preparation.
+    """
+    model = object.__new__(LiteLLMModel)
+    model.model_config = model_config
+    model.dataset_config = dataset_config
+    model.benchmark_config = dataclasses.replace(
+        benchmark_config, generative_type=generative_type
+    )
+    model.is_ollama = False
+    model.log_metadata = False
+    model.buffer = {}
+    return model
 
 
 class TestCreateModelOutput:
@@ -126,6 +445,23 @@ class TestCreateModelOutput:
         assert len(output.scores[0]) == 1
         assert output.scores[1] == []
 
+    def test_trim_classification_logprobs_matches_complete_label(self) -> None:
+        """Overlapping labels trim scores at the complete JSON value."""
+        scores = [
+            [('"', -0.1)],
+            [("New", -0.2), ("York", -0.3)],
+            [(" York", -0.4)],
+            [('"', -0.5)],
+        ]
+
+        trimmed = LiteLLMModel._trim_classification_logprobs(
+            logprobs_list=scores,
+            value="New York",
+            classification_label_tokens=("New", "York"),
+        )
+
+        assert trimmed == scores[1:]
+
 
 class TestParameterErrorHandling:
     """Tests for unsupported generation parameter handling."""
@@ -187,6 +523,85 @@ def _make_response(content: str = "positive") -> MagicMock:
     return response
 
 
+def test_api_context_length_override_takes_precedence(
+    dataset_config: DatasetConfig, benchmark_config: BenchmarkConfig
+) -> None:
+    """An explicit context-length override takes precedence over vendor metadata."""
+    benchmark_config = dataclasses.replace(benchmark_config, max_context_length=8_000)
+    model_config = LiteLLMModel.get_model_config(
+        model_id="openai/gpt-6-astra", benchmark_config=benchmark_config
+    )
+    model = LiteLLMModel(
+        model_config=model_config,
+        dataset_config=dataset_config,
+        benchmark_config=benchmark_config,
+        log_metadata=False,
+    )
+
+    assert model.model_max_length == 8_000
+
+
+@pytest.mark.parametrize(
+    ("model_id", "expected"),
+    [
+        ("openai/gpt-6-astra", 1_050_000),
+        ("openai/gpt-6-sol", 1_050_000),
+        ("openai/gpt-6-luna", 1_050_000),
+        ("openai/gpt-6.1-sol", 1_050_000),
+        ("gpt-5.6", 1_050_000),
+        ("openai/gpt-5.6-sol", 1_050_000),
+        ("openai/gpt-5.6-terra", 1_050_000),
+        ("openai/gpt-5.6-luna", 1_050_000),
+        ("gemini/gemini-3.1-pro-preview", 1_048_576),
+        ("gemini/gemini-3.1-pro-preview-customtools", 1_048_576),
+        ("gemini/gemini-3.1-flash-lite", 1_048_576),
+        ("gemini/gemini-3.5-flash", 1_048_576),
+        ("gemini/gemini-3.5-flash-lite", 1_048_576),
+        ("gemini/gemini-3.6-flash", 1_048_576),
+        ("gemini/gemini-3.7-flash", 1_048_576),
+        ("gemini/gemini-3.8-flash", 1_048_576),
+        ("anthropic/claude-opus-5", 1_000_000),
+        ("anthropic/claude-sonnet-5", 1_000_000),
+        ("anthropic/claude-fable-5", 1_000_000),
+        ("anthropic/claude-mythos-5", 1_000_000),
+        ("anthropic/claude-fable-5-1", 1_000_000),
+        ("anthropic/claude-mythos-5-1", 1_000_000),
+        ("anthropic/claude-opus-5-5", 1_000_000),
+        ("anthropic/claude-sonnet-5-5", 1_000_000),
+        ("xai/grok-4.5", 500_000),
+        ("xai/grok-4.6", 500_000),
+        ("xai/grok-4.7", 500_000),
+        ("openai/gpt-5.6-nano", -1),
+        ("openai/gpt-6-beta", -1),
+        ("openai/gpt-6.1-astra", -1),
+        ("gemini/gemini-3.9-flash", -1),
+        ("gemini/gemini-3.5-pro", -1),
+        ("gemini/gemini-3.5-flash-preview", -1),
+        ("gemini/gemini-3.8-flash-lite", -1),
+        ("xai/grok-4.7-fast", -1),
+    ],
+)
+def test_api_model_context_lengths(
+    model_id: str,
+    expected: int,
+    dataset_config: DatasetConfig,
+    benchmark_config: BenchmarkConfig,
+) -> None:
+    """Documented API IDs expose their context lengths through the model interface."""
+    benchmark_config = dataclasses.replace(benchmark_config, max_context_length=None)
+    model_config = LiteLLMModel.get_model_config(
+        model_id=model_id, benchmark_config=benchmark_config
+    )
+    model = LiteLLMModel(
+        model_config=model_config,
+        dataset_config=dataset_config,
+        benchmark_config=benchmark_config,
+        log_metadata=False,
+    )
+
+    assert model.model_max_length == expected
+
+
 def test_deepseek_provider_prefix_is_preserved_for_custom_api(
     benchmark_config: BenchmarkConfig,
 ) -> None:
@@ -235,8 +650,13 @@ def test_deepseek_provider_prefix_is_preserved_for_custom_api(
         ("xai/grok-4.20", "2026-03-10"),
         ("xai/grok-4.5", "2026-07-08"),
         ("xai/grok-4.6", "2026-08-12"),
+        ("xai/grok-4.7", "2026-09-17"),
         ("openai/gpt-5.6-luna", "2026-07-09"),
         ("openai/gpt-5.6", "2026-07-09"),
+        ("openai/gpt-6-sol", "2026-09-22"),
+        ("openai/gpt-6-luna", "2026-09-22"),
+        ("typesafe/jev-1.13.0", "2026-09-15"),
+        ("typesafe/jev-1.13.1", None),
         ("provider/undated-model", None),
         ("provider/model-2024-99-99", None),
     ],

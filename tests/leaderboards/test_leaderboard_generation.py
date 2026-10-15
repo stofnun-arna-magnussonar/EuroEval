@@ -7,6 +7,7 @@ and ordinal ranks remain pan-leaderboard.
 
 from __future__ import annotations
 
+import datetime as dt
 import math
 from pathlib import Path
 
@@ -14,8 +15,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from euroeval.dataset_configs.danish import (
+    ANGRY_TWEETS_CONFIG,
+    DALA_CONFIG,
+    RAGTRUTH_DA_CONFIG,
+    VALEU_DA_CONFIG,
+)
+from euroeval.dataset_configs.norwegian import NOREC_CONFIG
+from euroeval.dataset_configs.swedish import SCALA_SV_CONFIG, SWEREC_CONFIG
 from src.leaderboards import leaderboard_generation
 from src.leaderboards.enums import LeaderboardCategory
+from src.leaderboards.invalid_results import InvalidResult, load_invalid_results
 from src.leaderboards.leaderboard_generation import (
     _build_category_dataset_maps,
     _compute_eligible_models_and_ranks,
@@ -144,6 +154,329 @@ class TestGlobalVariantSelection:
         assert [
             model for model in european["model"] if model.startswith("org/model")
         ] == ["org/model (val)"]
+
+
+class TestInvalidResults:
+    """Tests for leaving invalid (model, dataset) results out of aggregated scores."""
+
+    def test_empty_list_leaves_leaderboard_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """An empty invalid-results file leaves every model ranked and unmarked."""
+        empty_file = tmp_path / "invalid_results.yaml"
+        empty_file.write_text("# No entries.\n", encoding="utf-8")
+        from_file = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "file",
+            scores=self._scores(),
+            invalid_results=load_invalid_results(path=empty_file),
+        )
+        from_list = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "list",
+            scores=self._scores(),
+            invalid_results=[],
+        )
+
+        assert from_file == from_list
+        assert "(invalid)" not in from_file[0]
+        simplified = pd.read_csv(tmp_path / "list" / "danish_generative_simplified.csv")
+        assert sorted(simplified["model"]) == ["org/a", "org/b", "org/c"]
+
+    @staticmethod
+    def _generate(
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        scores: dict[str, dict[str, list[tuple[list[float], float, float]]]],
+        invalid_results: list[InvalidResult],
+        generative_type: str = "base",
+        language_names: tuple[str, ...] = ("danish",),
+        force: bool = True,
+    ) -> tuple[str, str]:
+        """Generate a generative leaderboard from the given scores.
+
+        Args:
+            monkeypatch:
+                The pytest monkeypatch fixture.
+            tmp_path:
+                The directory to write the leaderboards to.
+            scores:
+                Model ID to dataset to scores.
+            invalid_results:
+                The invalid (model, dataset) results to apply.
+            generative_type (optional):
+                The generative type of every model. Orthogonal scores are only
+                shown for instruction-tuned and reasoning models.
+            language_names (optional):
+                The leaderboard languages: Danish, Swedish and/or Norwegian. Several
+                languages give a multilingual leaderboard named after the languages.
+            force (optional):
+                Whether to force writing the leaderboard files.
+
+        Returns:
+            The full and the simplified leaderboard CSV contents.
+        """
+        metadata = {
+            model_id: {
+                "generative_type": generative_type,
+                "model_type": None,
+                "parameters": 100,
+                "vocabulary_size": math.nan,
+                "context": math.nan,
+                "release_date": None,
+                "open": True,
+                "commercial": False,
+                "merge": False,
+                "trained_from_scratch": False,
+            }
+            for model_id in scores
+        }
+        monkeypatch.setattr(leaderboard_generation, "OUTPUT_DIR", tmp_path)
+        monkeypatch.setattr(leaderboard_generation, "NUM_BOOTSTRAPS", 20)
+        monkeypatch.setattr(leaderboard_generation, "load_raw_results", lambda: [{}])
+        monkeypatch.setattr(
+            leaderboard_generation, "group_results_by_model", lambda results: scores
+        )
+        monkeypatch.setattr(
+            leaderboard_generation, "extract_model_metadata", lambda results: metadata
+        )
+        configs = {
+            "danish": {
+                ANGRY_TWEETS_CONFIG.task.name: [ANGRY_TWEETS_CONFIG.name],
+                DALA_CONFIG.task.name: [DALA_CONFIG.name],
+                VALEU_DA_CONFIG.task.name: [VALEU_DA_CONFIG.name],
+            },
+            "swedish": {
+                SWEREC_CONFIG.task.name: [SWEREC_CONFIG.name],
+                SCALA_SV_CONFIG.task.name: [SCALA_SV_CONFIG.name],
+            },
+            "norwegian": {NOREC_CONFIG.task.name: [NOREC_CONFIG.name]},
+        }
+        monkeypatch.setattr(
+            leaderboard_generation,
+            "official_datasets_for_language",
+            lambda language: configs[language],
+        )
+        monkeypatch.setattr(
+            leaderboard_generation, "load_invalid_results", lambda: invalid_results
+        )
+        leaderboard_name = "_".join(language_names)
+        leaderboard_generation.generate_leaderboard(
+            leaderboard_name=leaderboard_name,
+            language_names=list(language_names),
+            categories=[LeaderboardCategory.GENERATIVE],
+            force=force,
+        )
+        return (
+            (tmp_path / f"{leaderboard_name}_generative.csv").read_text(
+                encoding="utf-8"
+            ),
+            (tmp_path / f"{leaderboard_name}_generative_simplified.csv").read_text(
+                encoding="utf-8"
+            ),
+        )
+
+    @staticmethod
+    def _scores() -> dict[str, dict[str, list[tuple[list[float], float, float]]]]:
+        """Create scores for three models on Danish, Swedish and Norwegian datasets.
+
+        Returns:
+            Model ID to dataset to scores.
+        """
+        return {
+            model_id: {
+                ANGRY_TWEETS_CONFIG.name: [([score, score + 2.0], score + 1.0, 1.0)],
+                DALA_CONFIG.name: [([score, score + 4.0], score + 2.0, 2.0)],
+                VALEU_DA_CONFIG.name: [([30.0, 40.0], 35.0, 0.1)],
+                SWEREC_CONFIG.name: [([score, score + 2.0], score + 1.0, 1.0)],
+                SCALA_SV_CONFIG.name: [([score, score + 4.0], score + 2.0, 2.0)],
+                NOREC_CONFIG.name: [([score, score + 2.0], score + 1.0, 1.0)],
+            }
+            for model_id, score in (("org/a", 70.0), ("org/b", 60.0), ("org/c", 50.0))
+        }
+
+    def test_invalid_orthogonal_result_is_shown_and_marked(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """An invalid orthogonal result keeps its score, marked, and ranks are kept."""
+        with_invalid = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "invalid",
+            scores=self._scores(),
+            invalid_results=[
+                self._invalid_result(model="org/a", dataset=VALEU_DA_CONFIG.name)
+            ],
+            generative_type="instruction_tuned",
+        )
+        without_entry = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "valid",
+            scores=self._scores(),
+            invalid_results=[],
+            generative_type="instruction_tuned",
+        )
+
+        full = pd.read_csv(tmp_path / "invalid" / "danish_generative.csv", skiprows=1)
+        valid = pd.read_csv(tmp_path / "valid" / "danish_generative.csv", skiprows=1)
+        pd.testing.assert_frame_equal(
+            full[["Model", "Rank", "Rank score"]],
+            valid[["Model", "Rank", "Rank score"]],
+        )
+        assert with_invalid[1] == without_entry[1]
+        values_col = next(col for col in full.columns if "European Values" in col)
+        values = full.set_index("Model")[values_col]
+        assert values["org/a"] == "35.00 ± 0.20 (invalid)"
+        assert values.drop(index="org/a").tolist() == ["35.00 ± 0.20"] * 2
+
+    @staticmethod
+    def _invalid_result(model: str, dataset: str = DALA_CONFIG.name) -> InvalidResult:
+        """Create an invalid result for a model.
+
+        Args:
+            model:
+                The model ID.
+            dataset (optional):
+                The dataset name. Defaults to DaLA.
+
+        Returns:
+            The invalid result.
+        """
+        return InvalidResult(
+            model=model,
+            dataset=dataset,
+            reason="Trained on the test split.",
+            source="https://example.com/model-card",
+            date=dt.date(2026, 1, 13),
+        )
+
+    def test_invalid_result_is_shown_but_not_ranked(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """An invalid result is marked and ranked as if it were missing."""
+        with_invalid = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "invalid",
+            scores=self._scores(),
+            invalid_results=[self._invalid_result(model="org/a")],
+        )
+        scores_without_dala = self._scores()
+        del scores_without_dala["org/a"][DALA_CONFIG.name]
+        without_result = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path / "missing",
+            scores=scores_without_dala,
+            invalid_results=[],
+        )
+
+        full = pd.read_csv(tmp_path / "invalid" / "danish_generative.csv", skiprows=1)
+        missing = pd.read_csv(
+            tmp_path / "missing" / "danish_generative.csv", skiprows=1
+        )
+        pd.testing.assert_frame_equal(
+            full[["Model", "Rank", "Rank score"]],
+            missing[["Model", "Rank", "Rank score"]],
+        )
+        assert with_invalid[1] == without_result[1]
+
+        row = full.set_index("Model").loc["org/a"]
+        dala_col, angry_tweets_col = (
+            next(
+                col
+                for col in full.columns
+                if col.endswith(f">{config.name.replace('-', '_')}</a>")
+            )
+            for config in (DALA_CONFIG, ANGRY_TWEETS_CONFIG)
+        )
+        assert row[dala_col] == "72.00 ± 2.00 (invalid)"
+        assert row[angry_tweets_col] == "71.00 ± 1.00"
+        assert row["Rank score"] == "-"
+        other_rows = full.set_index("Model").drop(index="org/a")
+        assert not other_rows[dala_col].str.contains("(invalid)", regex=False).any()
+
+        simplified = pd.read_csv(
+            tmp_path / "invalid" / "danish_generative_simplified.csv"
+        )
+        assert sorted(simplified["model"]) == ["org/b", "org/c"]
+
+    def test_new_entry_rewrites_language_rank_without_force(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A non-forced run rewrites a language rank that a new entry removes.
+
+        The model has no Norwegian result, so it is unranked overall but ranked in
+        Danish and Swedish. Invalidating a Danish result removes only its Danish rank.
+        """
+        scores = self._scores()
+        scores["org/d"] = {
+            dataset: score
+            for dataset, score in scores["org/c"].items()
+            if dataset != NOREC_CONFIG.name
+        }
+        language_names = ("danish", "swedish", "norwegian")
+        self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path,
+            scores=scores,
+            invalid_results=[],
+            language_names=language_names,
+        )
+        full_path = tmp_path / "danish_swedish_norwegian_generative.csv"
+        before = pd.read_csv(full_path, skiprows=1).set_index("Model")
+        self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path,
+            scores=scores,
+            invalid_results=[self._invalid_result(model="org/d")],
+            language_names=language_names,
+            force=False,
+        )
+        after = pd.read_csv(full_path, skiprows=1).set_index("Model")
+
+        assert before.loc["org/d", ["Rank score", "Norwegian"]].tolist() == ["-", "-"]
+        assert "-" not in before.loc["org/d", ["Danish", "Swedish"]].tolist()
+        assert after.loc["org/d", ["Rank score", "Danish"]].tolist() == ["-", "-"]
+        assert after.loc["org/d", "Swedish"] != "-"
+
+    def test_new_entry_rewrites_multilingual_leaderboard_without_force(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A non-forced run rewrites a multilingual leaderboard after a new entry."""
+        before = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path,
+            scores=self._scores(),
+            invalid_results=[],
+            language_names=("danish", "swedish"),
+        )
+        after = self._generate(
+            monkeypatch=monkeypatch,
+            tmp_path=tmp_path,
+            scores=self._scores(),
+            invalid_results=[self._invalid_result(model="org/a")],
+            language_names=("danish", "swedish"),
+            force=False,
+        )
+
+        assert after != before
+        simplified = pd.read_csv(tmp_path / "danish_swedish_generative_simplified.csv")
+        assert sorted(simplified["model"]) == ["org/b", "org/c"]
+        full = pd.read_csv(tmp_path / "danish_swedish_generative.csv", skiprows=1)
+        row = full.set_index("Model").loc["org/a"]
+        assert row["Rank score"] == "-"
+        assert row["Danish"] == "-"
+        assert row["Swedish"] != "-"
+
+    def test_unknown_model_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """An entry for a model without results stops leaderboard generation."""
+        with pytest.raises(ValueError, match="org/missing"):
+            self._generate(
+                monkeypatch=monkeypatch,
+                tmp_path=tmp_path,
+                scores=self._scores(),
+                invalid_results=[self._invalid_result(model="org/missing")],
+            )
 
 
 class TestMultilingualPerLanguageRankScores:
@@ -563,12 +896,72 @@ def _make_dummy_results(
 class TestOrthogonalDatasetsByCategory:
     """Tests for orthogonal bonus-column scoping in _build_category_dataset_maps."""
 
-    def test_orthogonal_datasets_only_populated_for_chat(self) -> None:
-        """Orthogonal datasets are only mapped for chat; other categories get {}."""
+    def test_hallucination_result_is_optional_and_does_not_change_ranking(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Hallucination results are optional and leave rank eligibility unchanged."""
+        hallucination_task = RAGTRUTH_DA_CONFIG.task.name
+        hallucination_dataset = RAGTRUTH_DA_CONFIG.name
+        assert hallucination_task == "hallucination"
+        assert hallucination_dataset == "ragtruth-da"
+        config = {
+            "danish": {
+                "sentiment-classification": ["angry-tweets"],
+                hallucination_task: [hallucination_dataset],
+            }
+        }
+        category = LeaderboardCategory.CHAT
+        _, orthogonal = _build_category_dataset_maps(
+            categories=[category], leaderboard_configs=config
+        )
+        standard = {"angry-tweets": [([70.0, 80.0], 75.0, 0.0)]}
+        with_hallucination = {
+            "model-a": standard | {hallucination_dataset: [([0.2], 0.2, 0.0)]},
+            "model-b": standard,
+        }
+        without_hallucination = {"model-a": standard, "model-b": standard}
+
+        monkeypatch.setattr(leaderboard_generation, "NUM_BOOTSTRAPS", 20)
+
+        def rank_inputs(
+            model_results: dict[str, dict[str, list[tuple[list[float], float, float]]]],
+        ) -> tuple[dict, dict, dict]:
+            eligible, _, ranks, ordinal_ranks = _compute_eligible_models_and_ranks(
+                model_results=model_results,
+                category=category,
+                category_to_datasets={
+                    category: ["angry-tweets", hallucination_dataset]
+                },
+                category_to_orthogonal_datasets=orthogonal,
+                leaderboard_configs=config,
+            )
+            return eligible, ranks, ordinal_ranks
+
+        with_result = rank_inputs(with_hallucination)
+        without_result = rank_inputs(without_hallucination)
+        assert set(with_result[0]) == {"model-a", "model-b"}
+        assert set(without_result[0]) == {"model-a", "model-b"}
+        assert with_result[1:] == without_result[1:]
+        assert with_result[1]
+        assert with_result[2]
+
+        collected = leaderboard_generation._collect_orthogonal_scores(
+            model_results=with_hallucination,
+            category=category,
+            category_to_orthogonal_datasets=orthogonal,
+        )
+        assert collected["model-a"][hallucination_dataset] == (0.2, None)
+        assert "model-b" not in collected
+
+    def test_orthogonal_datasets_populated_for_chat_and_generative(self) -> None:
+        """Orthogonal datasets map to Chat and Generative only."""
+        hallucination_task = RAGTRUTH_DA_CONFIG.task.name
+        hallucination_dataset = RAGTRUTH_DA_CONFIG.name
         leaderboard_configs = {
             "danish": {
                 "sentiment-classification": ["angry-tweets"],
                 "european-values": ["valeu-da"],
+                hallucination_task: [hallucination_dataset],
             }
         }
         _, category_to_orthogonal_datasets = _build_category_dataset_maps(
@@ -576,15 +969,21 @@ class TestOrthogonalDatasetsByCategory:
                 LeaderboardCategory.CHAT,
                 LeaderboardCategory.GENERATIVE,
                 LeaderboardCategory.ALL_MODELS,
+                LeaderboardCategory.UNDERSTANDING,
             ],
             leaderboard_configs=leaderboard_configs,
         )
 
         assert category_to_orthogonal_datasets[LeaderboardCategory.CHAT] == {
-            "valeu-da": "european-values"
+            "valeu-da": "european-values",
+            hallucination_dataset: hallucination_task,
         }
-        assert category_to_orthogonal_datasets[LeaderboardCategory.GENERATIVE] == {}
+        assert category_to_orthogonal_datasets[LeaderboardCategory.GENERATIVE] == {
+            "valeu-da": "european-values",
+            hallucination_dataset: hallucination_task,
+        }
         assert category_to_orthogonal_datasets[LeaderboardCategory.ALL_MODELS] == {}
+        assert category_to_orthogonal_datasets[LeaderboardCategory.UNDERSTANDING] == {}
 
 
 class TestPerLanguageRankScoreFormat:
@@ -712,6 +1111,173 @@ def test_generate_all_models_csv_preserves_classifier_icon(
     assert icons == {"org/laya": "🎯", "org/encoder": "🔍"}
 
 
+def test_generate_generative_csv_keeps_optional_orthogonal_scores_out_of_rank(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Generate both optional columns without changing either model's rank."""
+    standard = ANGRY_TWEETS_CONFIG.name
+    values = VALEU_DA_CONFIG.name
+    hallucination = RAGTRUTH_DA_CONFIG.name
+    configs = {
+        ANGRY_TWEETS_CONFIG.task.name: [standard],
+        VALEU_DA_CONFIG.task.name: [values],
+        RAGTRUTH_DA_CONFIG.task.name: [hallucination],
+    }
+    scores = {
+        "org/a (zero-shot)": {standard: [([70.0, 80.0], 75.0, 0.0)]},
+        "org/b (zero-shot)": {standard: [([60.0, 70.0], 65.0, 0.0)]},
+    }
+    metadata = {
+        model_id: {
+            "generative_type": "instruction_tuned",
+            "model_type": None,
+            "parameters": 100,
+            "vocabulary_size": math.nan,
+            "context": math.nan,
+            "release_date": None,
+            "open": True,
+            "commercial": False,
+            "merge": False,
+            "trained_from_scratch": False,
+        }
+        for model_id in scores
+    }
+    monkeypatch.setattr(leaderboard_generation, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(leaderboard_generation, "NUM_BOOTSTRAPS", 20)
+    monkeypatch.setattr(leaderboard_generation, "load_raw_results", lambda: [{}])
+    monkeypatch.setattr(
+        leaderboard_generation, "group_results_by_model", lambda results: scores
+    )
+    monkeypatch.setattr(
+        leaderboard_generation, "extract_model_metadata", lambda results: metadata
+    )
+    monkeypatch.setattr(
+        leaderboard_generation,
+        "official_datasets_for_language",
+        lambda language: configs,
+    )
+
+    def generate() -> pd.DataFrame:
+        """Generate and read the public leaderboard CSV.
+
+        Returns:
+            The generated Generative leaderboard.
+        """
+        leaderboard_generation.generate_leaderboard(
+            leaderboard_name="danish",
+            language_names=["danish"],
+            categories=[LeaderboardCategory.GENERATIVE],
+            force=True,
+        )
+        return pd.read_csv(tmp_path / "danish_generative.csv", skiprows=1)
+
+    without = generate()
+    scores["org/a (zero-shot)"] |= {
+        values: [([30.0, 40.0], 35.0, 0.1)],
+        hallucination: [([0.4, 0.6], 0.5, 0.0)],
+    }
+    scores["org/b (zero-shot)"] |= {
+        values: [([35.678], 35.678, math.nan)],
+        hallucination: [([0.4, 0.6], 0.5, math.nan)],
+    }
+    with_scores = generate()
+
+    pd.testing.assert_frame_equal(
+        without[["Model", "Rank", "Rank score"]],
+        with_scores[["Model", "Rank", "Rank score"]],
+    )
+    assert len(with_scores) == 2
+    values_col = next(col for col in with_scores if "European Values" in col)
+    hallucination_col = (
+        '<a href="https://euroeval.com/tasks/hallucination-detection">'
+        "Hallucination Rate</a>"
+    )
+    assert hallucination_col in with_scores.columns
+    assert with_scores[values_col].tolist() == ["35.00 ± 0.20", "35.68"]
+    assert with_scores[hallucination_col].tolist() == ["0.50 ± 0.00", "0.5"]
+
+
+def test_generate_leaderboard_projects_orthogonal_scores_to_plain_model_variants(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Project orthogonal points and uncertainty to every variant row."""
+    standard = ANGRY_TWEETS_CONFIG.name
+    values = VALEU_DA_CONFIG.name
+    hallucination = RAGTRUTH_DA_CONFIG.name
+    configs = {
+        ANGRY_TWEETS_CONFIG.task.name: [standard],
+        VALEU_DA_CONFIG.task.name: [values],
+        RAGTRUTH_DA_CONFIG.task.name: [hallucination],
+    }
+    scores = {
+        "org/model": {standard: [([70.0, 80.0], 75.0, 0.0)]},
+        "org/model (zero-shot)": {standard: [([70.0, 80.0], 75.0, 0.0)]},
+    }
+    metadata = {
+        model_id: {
+            "generative_type": "instruction_tuned",
+            "model_type": None,
+            "parameters": 100,
+            "vocabulary_size": math.nan,
+            "context": math.nan,
+            "release_date": None,
+            "open": True,
+            "commercial": False,
+            "merge": False,
+            "trained_from_scratch": False,
+        }
+        for model_id in scores
+    }
+    monkeypatch.setattr(leaderboard_generation, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(leaderboard_generation, "NUM_BOOTSTRAPS", 20)
+    monkeypatch.setattr(leaderboard_generation, "load_raw_results", lambda: [{}])
+    monkeypatch.setattr(
+        leaderboard_generation, "group_results_by_model", lambda results: scores
+    )
+    monkeypatch.setattr(
+        leaderboard_generation, "extract_model_metadata", lambda results: metadata
+    )
+    monkeypatch.setattr(
+        leaderboard_generation,
+        "official_datasets_for_language",
+        lambda language: configs,
+    )
+
+    def generate() -> pd.DataFrame:
+        """Generate and read the public leaderboard CSV.
+
+        Returns:
+            The generated Generative leaderboard.
+        """
+        leaderboard_generation.generate_leaderboard(
+            leaderboard_name="danish",
+            language_names=["danish"],
+            categories=[LeaderboardCategory.GENERATIVE],
+            force=True,
+        )
+        return pd.read_csv(tmp_path / "danish_generative.csv", skiprows=1)
+
+    without = generate()
+    scores["org/model (zero-shot)"] |= {
+        values: [([30.0, 40.0], 35.0, 0.1)],
+        hallucination: [([0.5], 0.5, math.nan)],
+    }
+    with_scores = generate()
+
+    pd.testing.assert_frame_equal(
+        without[["Model", "Rank", "Rank score"]],
+        with_scores[["Model", "Rank", "Rank score"]],
+    )
+    assert len(with_scores) == 2
+    values_col = next(col for col in with_scores if "European Values" in col)
+    hallucination_col = (
+        '<a href="https://euroeval.com/tasks/hallucination-detection">'
+        "Hallucination Rate</a>"
+    )
+    assert with_scores[values_col].tolist() == ["35.00 ± 0.20", "35.00 ± 0.20"]
+    assert with_scores[hallucination_col].tolist() == [0.5, 0.5]
+
+
 def test_release_date_is_emitted_for_frontend_visualizations() -> None:
     """The existing result metadata reaches the full leaderboard CSV."""
     df = pd.DataFrame(
@@ -747,3 +1313,56 @@ def test_release_date_is_emitted_for_frontend_visualizations() -> None:
     )
 
     assert full.loc[0, "Release Date"] == "2024-02-03"
+
+
+def test_understanding_rank_pool_excludes_zero_shot_classifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Laya may have scores but must not affect Understanding bootstrap ranks."""
+    observed_model_ids: list[set[str]] = []
+
+    def fake_bootstrap_rank_scores(model_results: dict, **_: object) -> dict:
+        observed_model_ids.append(set(model_results))
+        return {}
+
+    monkeypatch.setattr(
+        leaderboard_generation, "bootstrap_rank_scores", fake_bootstrap_rank_scores
+    )
+    monkeypatch.setattr(
+        leaderboard_generation,
+        "bootstrap_confidence_intervals",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        leaderboard_generation,
+        "compute_standard_ranks_from_bootstrap_scores",
+        lambda **_: {},
+    )
+
+    _compute_eligible_models_and_ranks(
+        model_results={
+            "encoder": {"sentiment": []},
+            "Laya": {"sentiment": []},
+            "zero_shot_generative": {"sentiment": []},
+        },
+        category=LeaderboardCategory.UNDERSTANDING,
+        category_to_datasets={LeaderboardCategory.UNDERSTANDING: ["sentiment"]},
+        category_to_orthogonal_datasets={LeaderboardCategory.UNDERSTANDING: {}},
+        leaderboard_configs={
+            "english": {"sentiment-classification": ["sentiment"]},
+            "danish": {"sentiment-classification": ["sentiment"]},
+        },
+        metadata_dict={
+            "Laya": {"model_type": "zero_shot_classifier"},
+            "zero_shot_generative": {
+                "model_type": "instruction_tuned_decoder",
+                "zero_shot": True,
+            },
+        },
+    )
+
+    assert observed_model_ids == [
+        {"encoder", "zero_shot_generative"},
+        {"encoder", "zero_shot_generative"},
+        {"encoder", "zero_shot_generative"},
+    ]

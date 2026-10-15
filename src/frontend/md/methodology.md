@@ -95,8 +95,9 @@ Every finetune uses the same model-agnostic recipe:
 - **Reproducibility:** a fixed seed per iteration (4242 plus the iteration index) with
   deterministic backend flags set.
 
-The validation split is used only for early stopping; the reported score always comes
-from the test split. Inputs longer than the 8,192-token context limit are truncated.
+The validation split is used only for early stopping; encoder reported scores always
+come from the test split, regardless of the configured evaluation split. Inputs longer
+than the 8,192-token context limit are truncated.
 
 ## Prompt Structure
 
@@ -261,6 +262,14 @@ visible (Robustness). Adding a model can only shift `pooled_std(d)` and the per-
 leader locally, so its effect on other models is small and shrinks as more models are
 added (Minimal Change).
 
+### Orthogonal task score intervals
+
+Optional orthogonal-task scores are shown with an approximate 95% interval when every
+contributing dataset has at least two finite samples and a finite, nonnegative standard
+error. The displayed halfwidth is `1.96 × sqrt(sum(SEᵢ²)) / number of datasets`, assuming
+independent datasets. This approximation is separate from the bootstrap intervals for
+rank scores; if any uncertainty is unavailable, only the point score is shown.
+
 ### Rank
 
 Alongside the mean rank score the leaderboard shows an integer **Rank** column — a
@@ -310,22 +319,28 @@ display standard accuracy scores for consistency.
 The public leaderboards add a few rules on top of the per-model evaluation described
 above:
 
-- **Model categories.** Each language has a *chat* leaderboard, restricted to
-  instruction-tuned and reasoning models and covering every task, including a handful
-  that only make sense for these kinds of models (e.g. instruction following, tool use,
-  bias evaluation); a *generative* leaderboard, covering the standard NLU and NLG tasks
-  and open to any generative model; and an *all models* leaderboard restricted to the
-  NLU tasks, so that encoder models can be compared on an equal footing. Models also
-  carry metadata - generative type, open vs. closed weights, commercial-use permission,
-  whether the model is a merge, parameter count and context length - which can be
-  filtered on the site.
+- **Model categories.** Each language has four leaderboards with distinct task scopes.
+  The *chat* leaderboard covers every task (including instruction following, tool use,
+  and bias evaluation) for instruction-tuned and reasoning models, using zero-shot
+  evaluations. The *generative* leaderboard covers the standard NLU and NLG tasks for
+  generative models, generally with few-shot evaluations. The *understanding* leaderboard
+  covers sequence/token classification, extractive question answering, and eligible
+  multiple-choice tasks for encoder and generative models. The *all models* leaderboard
+  covers sequence/token classification and eligible multiple-choice tasks across all
+  supported model types, including zero-shot classifiers such as Laya. Evaluation modes
+  vary by model and result: encoders are typically finetuned, generative results may be
+  few-shot or labelled zero-shot, and zero-shot classifiers use their classifier mode.
+  Each leaderboard's rank score and rank are computed over its own task set, so ranks
+  across categories are not directly comparable. Models also carry metadata - generative
+  type, open vs. closed weights, commercial-use permission, whether the model is a merge,
+  parameter count and context length - which can be filtered on the site.
 - **One result per model.** When several result records exist for the same model and
   dataset, EuroEval keeps the one produced by the newest framework version and drops
   validation-split results whenever a test-split result is available, so no model is
   counted twice.
-- **Orthogonal tasks.** A few evaluations — currently the European values survey — probe
-  a model's values rather than its capabilities. These are reported in their own columns
-  and are deliberately left out of the rank score.
+- **Orthogonal tasks.** The European values survey and hallucination detection probe
+  properties not captured by task performance. These are reported in their own columns and
+  deliberately left out of eligibility and the rank score. Missing results are allowed.
 - **Inference speed.** EuroEval can also measure inference speed (in GPT-2 tokens per
   second), but speed is reported separately and kept out of the rank score, which
   reflects quality only.

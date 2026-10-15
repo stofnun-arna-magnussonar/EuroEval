@@ -74,7 +74,7 @@ test:  ## Run tests
 	@uv run pytest && uv run readme-cov && rm .coverage*
 
 frontend:  ## Build and deploy the frontend
-	@vercel build --prod --yes && uv run python src/scripts/verify_vercel_functions.py && vercel deploy --prebuilt --prod
+	@uv run python src/scripts/prepare_vercel_worktree.py && vercel build --prod --yes && uv run python src/scripts/verify_vercel_functions.py && vercel deploy --prebuilt --prod
 
 leaderboards:  ## Collect finished evaluation results and regenerate leaderboards
 	@uv run python src/scripts/collect_evaluation_results.py
@@ -143,8 +143,8 @@ add-dev-version:
 
 publish:
 	@set -a; [ ! -f .env ] || source .env; set +a; \
-	if [ "$${PYPI_API_TOKEN:-}" = "" ]; then \
-		echo "No PyPI API token specified in the '.env' file, so cannot publish."; \
+	if [ -z "$${EUROEVAL_PYPI_API_TOKEN:-}" ] || [ -z "$${SCANDEVAL_PYPI_API_TOKEN:-}" ]; then \
+		echo "Both EUROEVAL_PYPI_API_TOKEN and SCANDEVAL_PYPI_API_TOKEN must be specified to publish."; \
 	else \
 		echo "Publishing to PyPI..."; \
 		$(MAKE) --quiet publish-euroeval \

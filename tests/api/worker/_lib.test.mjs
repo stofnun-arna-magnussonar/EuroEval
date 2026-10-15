@@ -89,6 +89,17 @@ test("unassignable contributors receive a stable actionable error", async () => 
   }
 });
 
+test("public ownership markers are signed-contract data without assignee requirements", () => {
+  const marker = { protocol_version: "volunteer-worker/v1", coordinator: "sentinel", submission: "active", leases: [{
+    lease_id: "public-lease", language: "da", worker: "worker", contributor: "alice",
+    expires_at: new Date(Date.now() + 60_000).toISOString(), ownership_mode: "public",
+  }] };
+  const parsed = parseVolunteerMarker(renderVolunteerMarker(marker));
+  assert.equal(parsed.leases[0].ownership_mode, "public");
+  assert.equal(volunteerAssigneesMatch([], parsed), true);
+  assert.equal(volunteerAssigneesMatch([{ login: "unrelated" }], parsed), false);
+});
+
 test("assignee ownership is case-insensitive and excludes manual identities", () => {
   const marker = { protocol_version: "volunteer-worker/v1", coordinator: "sentinel", submission: "active", leases: [{
     lease_id: "lease", language: "da", worker: "worker", contributor: "Alice",
@@ -180,11 +191,12 @@ test("promotion evidence binds safe canonical paths to digests", () => {
 });
 
 test("generated trusted scopes are exact-language and versioned", () => {
-  const scope = expectedScope("18.1.0.dev", "encoder", "da");
+  const scope = expectedScope("18.3.0", "encoder", "da");
   assert.equal(scope.language, "da");
-  assert.equal(scope.policy_version, "volunteer-scope/18.1.0.dev0");
+  assert.equal(scope.policy_version, "volunteer-scope/18.3.0");
   assert.ok(scope.allowed_identity_suffix_sets.length > 0);
   assert.ok(scope.allowed_identity_suffix_sets[0].length > 0);
+  assert.throws(() => expectedScope("18.3.0.dev0", "encoder", "da"), /no trusted expected scope/);
 });
 
 test("trusted policy preserves exact runtime alternatives", () => {

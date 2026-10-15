@@ -21,12 +21,33 @@ from functools import cache
 from euroeval import dataset_configs as _ds_module
 from euroeval.constants import ORTHOGONAL_TASKS
 from euroeval.data_models import DatasetConfig
-from euroeval.enums import GenerativeType
+from euroeval.enums import GenerativeType, TaskGroup
 from euroeval.languages import get_all_languages
 from euroeval.tasks import get_all_tasks
 
 from .constants import LEADERBOARD_TASKS, NLU_TASK_GROUPS
 from .enums import LeaderboardCategory
+
+
+def all_dataset_names() -> frozenset[str]:
+    """Return the name of every dataset defined in ``euroeval.dataset_configs``.
+
+    Returns:
+        The dataset names, both official and unofficial.
+    """
+    return frozenset(cfg.name for cfg in _iter_all_dataset_configs())
+
+
+@cache
+def _iter_all_dataset_configs() -> tuple[DatasetConfig, ...]:
+    """Collect every ``DatasetConfig`` defined in ``euroeval.dataset_configs``.
+
+    Returns:
+        Every ``DatasetConfig`` exported by the lib.
+    """
+    return tuple(
+        value for value in vars(_ds_module).values() if isinstance(value, DatasetConfig)
+    )
 
 
 def category_includes_task(category: LeaderboardCategory, task: str) -> bool:
@@ -42,12 +63,23 @@ def category_includes_task(category: LeaderboardCategory, task: str) -> bool:
         True if the task is scored within the category.
     """
     if task in ORTHOGONAL_TASKS:
-        return category == LeaderboardCategory.CHAT
+        return category in {LeaderboardCategory.CHAT, LeaderboardCategory.GENERATIVE}
     if category == LeaderboardCategory.CHAT:
         return True
     if category == LeaderboardCategory.GENERATIVE:
         return task_category(task) != "instruct_exclusive"
-    return task_category(task) == "nlu"
+    task_group = get_all_tasks()[task].task_group
+    if category == LeaderboardCategory.UNDERSTANDING:
+        return task_category(task) != "instruct_exclusive" and task_group in {
+            TaskGroup.SEQUENCE_CLASSIFICATION,
+            TaskGroup.TOKEN_CLASSIFICATION,
+            TaskGroup.QUESTION_ANSWERING,
+            TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+        }
+    return task_category(task) != "instruct_exclusive" and task_group in {
+        TaskGroup.SEQUENCE_CLASSIFICATION,
+        TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION,
+    }
 
 
 def task_category(task_name: str) -> str:
@@ -56,9 +88,8 @@ def task_category(task_name: str) -> str:
     A task is "instruct_exclusive" when it's restricted to instruction-tuned/
     reasoning models (`GenerativeType.BASE` isn't in its
     `default_allowed_generative_types`), unless it's also in
-    `euroeval.constants.ORTHOGONAL_TASKS`, in which case it keeps its
-    existing bonus-column treatment on Generative/All-models (e.g.
-    european-values) rather than being excluded from them entirely.
+    `euroeval.constants.ORTHOGONAL_TASKS`. Orthogonal tasks remain optional
+    columns on Chat and Generative rather than being excluded entirely.
 
     Args:
         task_name:
@@ -94,23 +125,6 @@ def dataset_sources() -> dict[str, str]:
         for cfg in _iter_all_dataset_configs()
         if isinstance(cfg.source, str) and cfg.source.strip()
     }
-
-
-@cache
-def _iter_all_dataset_configs() -> tuple[DatasetConfig, ...]:
-    """Collect every ``DatasetConfig`` defined in ``euroeval.dataset_configs``.
-
-    All built-in configs are re-exported into the ``euroeval.dataset_configs``
-    namespace, so we read them straight off the module. Cached because the
-    leaderboard pipeline calls into this module once per language and the set is
-    fixed per process.
-
-    Returns:
-        Every ``DatasetConfig`` exported by the lib.
-    """
-    return tuple(
-        value for value in vars(_ds_module).values() if isinstance(value, DatasetConfig)
-    )
 
 
 def languages_with_official_datasets() -> list[str]:

@@ -84,8 +84,9 @@ Pi/I to execute now; neither imports `.env` or mutates a file.
 
 5. **MANUAL** - publish the candidate image using the workflow, carry its digest from
    the non-secret job summary/artifact, run the physical Linux `amd64` NVIDIA GPU
-   canary, and manually promote that exact digest. Pi/I cannot perform a physical GPU
-   canary without hardware. Publication and production deployment require explicit
+   canary, and manually promote that exact digest. The separate Linux `arm64` candidate
+   remains unpromotable until its physical DGX Spark canary and a multi-platform
+   promotion have passed. Publication and production deployment require explicit
    approval.
 
 6. **AUTOMATED CHECK** - after deployment, run safe route probes. They issue only GET,
@@ -108,10 +109,10 @@ The volunteer path consists of these components:
   `api/worker/`. Vercel's `api/` convention maps each file to its matching HTTP route.
   The broker authenticates workers, finds GitHub issues, fences claims, validates
   results, and writes staged objects.
-- **GitHub:** `EuroEval/EuroEval` is the work queue and audit log. Issue assignees are
-  the mutable, authoritative active evaluators and credit identities for both manual
-  and volunteer paths. Signed markers in issue bodies are audit and integrity
-  evidence; they do not override current assignees.
+- **GitHub:** `EuroEval/EuroEval` is the work queue and audit log. Public volunteers
+  need no repository access: their authenticated account, broker lease, and signed
+  issue marker fence active work; accepted signed submissions provide credit. Manual
+  work and historical assignee-backed leases retain their assignee rules.
 - **GitHub OAuth device flow:** A volunteer authorises the OAuth app in a browser. The
   broker exchanges and immediately revokes the short-lived GitHub grant, then gives the
   worker an opaque, time-limited broker credential. GitHub and project secrets are never
@@ -133,20 +134,21 @@ The volunteer path consists of these components:
   validates staged evidence, records a durable decision, and calls the broker's
   promotion transition.
 - **Legacy/local queue:** `src/scripts/process_evaluation_queue.py` may still process
-  non-volunteer work. Its issue claims must use the same broker coordinator mutex as
-  volunteer claims.
+  non-volunteer work. Both claim paths take a shared cross-issue mutex before the
+  per-issue mutex and recheck open requests for matching model/language ownership.
+  This prevents a local claim on another issue from racing a public lease.
 
 The normal data flow is worker authentication, issue claim, evaluation, one result
 upload per identity, finalisation into a private manifest, maintainer review, and
 promotion or rejection. Acceptance copies only verified records to the canonical bucket.
-Issue assignees are the mutable, authoritative active evaluators and credit
-identities for manual and volunteer evaluations. A request may have multiple assignees
-when multiple volunteers contribute different languages; retain every assignee whose
-submission is accepted. Maintainers may transfer ownership or credit by changing the
-assignees, which fences old volunteer leases. Remove an assignee only when their work is
-rejected or intentionally released. Signed marker contributors are retained as audit and
-integrity evidence only. A complete set of accepted languages adds `results-ready`;
-credit follows the accepted assignees, while an individual accepted language does not.
+New public volunteer leases do not change issue assignees. The broker verifies the
+signed, issue-bound marker and matching lease identity before accepting work; the local
+queue respects its active and submitted languages under the shared coordinator lock.
+Accepted signed submissions provide public volunteer credit only after review. Manual
+work and historical assignee-backed leases continue to use issue assignees for
+ownership and credit. Do not remove or edit signed markers to transfer public work;
+release or reject it through the broker. A complete set of accepted languages adds
+`results-ready`.
 
 ## One-time prerequisites
 
@@ -196,10 +198,9 @@ credential should be issued.
 
 Create a maintainer-owned GitHub token with the least privilege that permits the broker
 to read and update issues, assignees, labels, and comments in `EuroEval/EuroEval`. Store
-it only in Vercel's encrypted environment variables. The broker uses this token to read
-and update issues, assignees, labels, and comments. Every volunteer OAuth login must be
-GitHub-assignable in this repository; otherwise claim stops with an actionable error and
-the volunteer must use an eligible account.
+it only in Vercel's encrypted environment variables. The broker uses this token for
+issue markers, labels, comments, and historical assignee-backed leases. Public volunteers
+only authenticate with GitHub; they do not need an invitation or repository access.
 
 Create these labels in `EuroEval/EuroEval` with these exact names:
 
@@ -208,9 +209,9 @@ Create these labels in `EuroEval/EuroEval` with these exact names:
 - `results-ready` — added when all selected languages have accepted submissions.
 
 If the legacy/local queue will remain active, also retain its labels `evaluation-failed`
-and `gated`. Maintainers transfer ownership or credit by changing issue assignees.
-Changing assignees fences old volunteer leases. Do not treat signed marker contributors
-as current ownership; they are retained for audit and integrity checks.
+and `gated`. Configure its shared coordinator lock and `VOLUNTEER_MARKER_SECRET` before
+running it alongside public volunteers; otherwise it must not claim issues. Changing
+assignees still fences historical assignee-backed leases, not new public leases.
 
 ### 4. Reuse the existing Vercel KV database
 
@@ -279,11 +280,12 @@ Use `--check` to verify both synchronized files without writing, or `--dry-run` 
 preview whether either would change. `--ts-output <path>` overrides the TypeScript
 mirror location when using a custom JSON output. Commit both generated files with the
 release change. Keep the EuroEval
-release and policy versions aligned separately: the policy's `euroeval_version` must
-match the repository's EuroEval package version and
-`EUROEVAL_VERSION` in Vercel (including the repository's
-normal development-version normalisation). `VOLUNTEER_WORKER_VERSION` is independent
-worker protocol/package versioning; it is currently `1.0.0` and must match the worker
+release and policy versions aligned separately: a trailing `.dev` or `.dev0` in the
+source package version is only a source-vs-PyPI installation marker, so the policy and
+`EUROEVAL_VERSION` use the equivalent release version (for example, `18.3.0`). A
+nonzero development suffix or different base version remains distinct.
+`VOLUNTEER_WORKER_VERSION` is independent worker protocol/package versioning; it is
+currently `1.0.0` and must match the worker
 image/package being published, but need not equal the EuroEval version. The policy
 controls exact result identities; do not hand-edit it. `VOLUNTEER_SCOPE_POLICY_JSON` is
 an optional complete override for an intentional, reviewed deployment policy, not a way
@@ -577,22 +579,22 @@ same outcome; an opposite outcome is refused.
 
 Do not manually copy staged files, edit issue markers, delete audit manifests, or award
 credit. A rejected language becomes leaseable again while its signed audit history
-remains. When all selected languages are accepted, the broker adds `results-ready` and
-retains the assignees whose submissions were accepted. If several volunteers contributed,
-keep multiple assignees; remove an assignee only after rejection or intentional release.
+remains. When all selected languages are accepted, the broker adds `results-ready`;
+accepted signed public submissions provide volunteer credit without issue assignment.
+Historical assignee-backed submissions retain their assignee credit rules.
 
 ## Image publishing and canary
 
 This is a per-release process, not a one-time prerequisite. The
-`.github/workflows/worker-image.yaml` workflow builds only `linux/amd64` with BuildKit
-layer caching. Pull requests do not publish or attest an image: they load the local
-image and smoke its normal entrypoint as UID 10001 without a GPU. Trusted runs publish
-only the immutable commit-SHA candidate with provenance and an SBOM, verify the public
-GHCR package, inspect the exact candidate manifest anonymously with `docker manifest
-inspect` using a fresh empty Docker config (and no `BUILDX_BUILDER`), and print the
-digest. The check resolves both the digest reference and SHA tag, compares their
-canonical manifest content, and requires a non-null `linux/amd64` child digest.
-The workflow never creates or updates `latest`.
+`.github/workflows/worker-image.yaml` workflow builds separate `linux/amd64` and
+`linux/arm64` candidates with BuildKit layer caching. Pull requests do not publish or
+attest an image: they load each local image and smoke its normal entrypoint as UID
+10001 without a GPU. Trusted runs publish distinct immutable commit-SHA candidates
+with provenance and an SBOM. They verify each public GHCR tag against its exact digest
+anonymously with a fresh empty Docker config and require a matching platform child
+digest. The workflow never creates or updates `latest`. The ARM64 candidate is not a
+production image until it passes a physical DGX Spark canary; do not promote its
+single-platform digest or configure the broker to attest it for AMD64 volunteers.
 
 After the package is public and the workflow has printed a verified digest, run this on
 a physical Linux `amd64` NVIDIA host:

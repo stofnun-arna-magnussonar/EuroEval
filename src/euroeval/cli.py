@@ -8,6 +8,7 @@ from .benchmarker import Benchmarker
 from .constants import ATTENTION_BACKENDS
 from .data_models import DatasetConfig
 from .enums import Device, GenerativeType, ShotMode
+from .exceptions import NeedsExtraInstalled
 from .languages import get_all_languages
 
 
@@ -132,8 +133,10 @@ from .languages import get_all_languages
     "--evaluate-test-split/--evaluate-val-split",
     default=False,
     show_default=True,
-    help="""Whether to only evaluate on the test split. Only use this for your final
-    evaluation, as the test split should not be used for development.""",
+    help="""Whether to evaluate on the test split. Encoder models always use the test
+    split for final scores regardless of this option; validation is used only for early
+    stopping. This option controls the split for generative models and zero-shot
+    classifiers. Use validation for model development, not final evaluation.""",
 )
 @click.option(
     "--few-shot/--zero-shot",
@@ -290,6 +293,8 @@ def benchmark(
             If `--dataset` is combined with `--task` or with `--language`, as
             `--dataset` fully specifies which datasets, configurations and splits to
             benchmark.
+        click.ClickException:
+            If a selected model requires an optional extra that is not installed.
     """
     if dataset and task:
         raise click.UsageError("Only one of `--task` and `--dataset` can be specified.")
@@ -300,7 +305,7 @@ def benchmark(
             "subset of the dataset to narrow the run."
         )
 
-    Benchmarker(
+    benchmarker = Benchmarker(
         language=list(language),
         task=None if len(task) == 0 else list(task),
         dataset=None if len(dataset) == 0 else list(dataset),
@@ -334,7 +339,11 @@ def benchmark(
         max_context_length=max_context_length,
         vocabulary_size=vocabulary_size,
         num_parameters=num_parameters,
-    ).benchmark(model=list(model))
+    )
+    try:
+        benchmarker.benchmark(model=list(model))
+    except NeedsExtraInstalled as error:
+        raise click.ClickException(error.message) from error
 
 
 if __name__ == "__main__":

@@ -95,15 +95,17 @@ checkpoint-*
 # Cache
 .scandeval_cache/
 .euroeval_cache/
+.euroeval_cache-*/
 
 # Result log
 scandeval_benchmark_results.jsonl
 /euroeval_benchmark_results.jsonl
 
 # Leaderboard generation inputs (large, kept off-repo; see src/leaderboards/paths.py)
+=======
+# Result logs and leaderboard generation inputs (see src/leaderboards/paths.py)
+**/*_results.jsonl
 results.tar.gz
-new_results.jsonl
-ucloud*_results.jsonl
 
 # hf-mount mount point (HF bucket mounted as filesystem)
 .hf-mount/
@@ -157,6 +159,7 @@ debug*.py
 
 # Node
 node_modules/
+node_modules-*/
 
 # Auto-generated API reference (rebuilt from src/euroeval/ on dev + build).
 src/frontend/md/api.md

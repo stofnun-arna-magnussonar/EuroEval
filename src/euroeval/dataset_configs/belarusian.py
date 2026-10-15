@@ -11,6 +11,7 @@ from ..tasks import (
     NLI,
     RC,
     SENT,
+    TOOL_CALLING,
     TRANSLATION,
     WIC,
 )
@@ -57,6 +58,7 @@ BE_WSC_CONFIG = DatasetConfig(
     source="EuroEval/be-wsc",
     task=COMMON_SENSE,
     languages=[BELARUSIAN],
+    labels=["a", "b"],
 )
 
 MULTI_IFEVAL_BE_CONFIG = DatasetConfig(
@@ -101,6 +103,16 @@ BELACOLA_CONFIG = DatasetConfig(
 )
 
 # Unofficial datasets ###
+
+MULTI_BFCL_BE_CONFIG = DatasetConfig(
+    name="multi-bfcl-be",
+    pretty_name="MultiBFCL-be",
+    source="EuroEval/multi-bfcl-be-mini",
+    task=TOOL_CALLING,
+    languages=[BELARUSIAN],
+    train_split=None,
+)
+
 
 FLORES_BE_EN_CONFIG = TranslationDatasetConfig(
     name="flores-be-en",

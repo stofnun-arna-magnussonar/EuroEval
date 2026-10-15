@@ -14,6 +14,20 @@ from leaderboards.task_metadata import (
 )
 
 
+def test_all_models_includes_only_sequence_and_multiple_choice() -> None:
+    """All Models includes its encoder-compatible task groups."""
+    assert category_includes_task(
+        LeaderboardCategory.ALL_MODELS, "sentiment-classification"
+    )
+    assert category_includes_task(LeaderboardCategory.ALL_MODELS, "knowledge")
+    assert not category_includes_task(
+        LeaderboardCategory.ALL_MODELS, "named-entity-recognition"
+    )
+    assert not category_includes_task(
+        LeaderboardCategory.ALL_MODELS, "reading-comprehension"
+    )
+
+
 def test_category_includes_task_all_models_only_scores_nlu() -> None:
     """all_models only scores tasks whose task group is an NLU group."""
     assert category_includes_task(
@@ -41,14 +55,19 @@ def test_category_includes_task_generative_excludes_instruct_exclusive() -> None
     )
 
 
-def test_category_includes_task_only_chat_shows_orthogonal_tasks() -> None:
-    """Orthogonal tasks (e.g. european-values) only show on chat."""
-    assert not category_includes_task(
-        category=LeaderboardCategory.GENERATIVE, task="european-values"
-    )
-    assert not category_includes_task(
-        category=LeaderboardCategory.ALL_MODELS, task="european-values"
-    )
+def test_category_includes_task_orthogonal_tasks_on_chat_and_generative() -> None:
+    """Orthogonal tasks show on Chat and Generative, but not other categories."""
+    for task in ("hallucination", "european-values"):
+        assert category_includes_task(category=LeaderboardCategory.CHAT, task=task)
+        assert category_includes_task(
+            category=LeaderboardCategory.GENERATIVE, task=task
+        )
+        assert not category_includes_task(
+            category=LeaderboardCategory.ALL_MODELS, task=task
+        )
+        assert not category_includes_task(
+            category=LeaderboardCategory.UNDERSTANDING, task=task
+        )
 
 
 def test_dataset_sources_omits_blank_sources_but_maps_valid_sources(
@@ -66,6 +85,12 @@ def test_dataset_sources_omits_blank_sources_but_maps_valid_sources(
         assert task_metadata.dataset_sources() == {"conll-nl": "EuroEval/conll-nl-mini"}
     finally:
         task_metadata.dataset_sources.cache_clear()
+
+
+def test_hallucination_is_included_in_leaderboard_dataset_selection() -> None:
+    """Official RAGTruth results are available to chat leaderboards."""
+    assert "hallucination" in LEADERBOARD_TASKS
+    assert "ragtruth-da" in official_datasets_for_language("danish")["hallucination"]
 
 
 def test_task_category_european_values_is_exempt_from_instruct_exclusive() -> None:
@@ -108,3 +133,23 @@ def test_translation_is_excluded_from_leaderboard_dataset_selection() -> None:
     """Translation remains outside the leaderboard task list for now."""
     assert "translation" not in LEADERBOARD_TASKS
     assert "translation" not in official_datasets_for_language("bulgarian")
+
+
+def test_understanding_includes_classification_qa_and_multiple_choice() -> None:
+    """Understanding covers eligible NLU and multiple-choice tasks."""
+    for task in (
+        "sentiment-classification",
+        "named-entity-recognition",
+        "reading-comprehension",
+        "knowledge",
+    ):
+        assert category_includes_task(LeaderboardCategory.UNDERSTANDING, task)
+    assert not category_includes_task(
+        LeaderboardCategory.UNDERSTANDING, "summarization"
+    )
+    assert not category_includes_task(
+        LeaderboardCategory.UNDERSTANDING, "instruction-following"
+    )
+    assert not category_includes_task(
+        LeaderboardCategory.UNDERSTANDING, "multiple-choice-stereotype-bias"
+    )

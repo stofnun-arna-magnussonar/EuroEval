@@ -62,7 +62,83 @@ function mockBroker(issue, values) {
   };
 }
 
-test("claim rejects an issue model edited during metadata resolution", async () => {
+for (const upstreamSlow of [false, true]) test(
+  `claim scans 148 candidates without GPU allocation${upstreamSlow ? " and bounds slow Hub retries" : ""}`,
+  async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  Object.assign(process.env, { VOLUNTEER_MARKER_SECRET: "marker-secret",
+    VOLUNTEER_WORKER_IMAGE_DIGEST: "sha256:image", EUROEVAL_VERSION: "1.0.0",
+    VOLUNTEER_WORKER_VERSION: "1.0.0", UPSTASH_REDIS_REST_URL: "https://redis.test",
+    UPSTASH_REDIS_REST_TOKEN: "redis-token", GITHUB_TOKEN: "github-token" });
+  const credentialKey = `euroeval:worker:credential:${await sha256("credential")}`;
+  const issues = Array.from({ length: 148 }, (_, index) => ({
+    number: index + 1, title: `[MODEL EVALUATION REQUEST] org/model-${index}`,
+    body: `### Model ID\\n\\norg/model-${index}\\n\\n- [x] Scandinavian languages (Danish, Faroese, Icelandic, Norwegian, Swedish)`,
+    state: "open", assignees: [],
+  }));
+  let inFlight = 0;
+  let maxInFlight = 0;
+  let metadataCalls = 0;
+  let configCalls = 0;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url === "https://redis.test") {
+      const command = JSON.parse(init.body);
+      if (command[0] === "GET") return Response.json({ result: command[1] === credentialKey
+        ? JSON.stringify({ contributor: "alice" }) : null });
+      return Response.json({ result: command[0] === "SET" ? "OK" : 1 });
+    }
+    if (url.includes("/repos/EuroEval/EuroEval/issues?")) {
+      const page = Number(new URL(url).searchParams.get("page"));
+      return Response.json(issues.slice((page - 1) * 100, page * 100));
+    }
+    if (url.includes("huggingface.co/api/models/")) {
+      metadataCalls++;
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      inFlight--;
+      const id = url.split("/api/models/")[1].split("?")[0];
+      if (upstreamSlow && id === "org/model-0") {
+        return new Response(null, { status: 429, headers: { "retry-after": "30" } });
+      }
+      return Response.json({ id, private: false, gated: false, siblings: [
+        { rfilename: "model.safetensors", size: 100 }, { rfilename: "config.json", size: 10 },
+      ] });
+    }
+    if (url.includes("/raw/") && url.endsWith("/config.json")) configCalls++;
+    throw new Error(`Unexpected request: ${init.method || "GET"} ${url}`);
+  };
+  try {
+    const started = Date.now();
+    const response = await claim(new Request("https://euroeval.test/api/worker/claim", {
+      method: "POST", headers: { authorization: "Bearer credential", "content-type": "application/json" },
+      body: JSON.stringify({ protocol_version: "volunteer-worker/v1", worker_version: "1.0.0",
+        hardware: { architecture: "amd64", free_disk_bytes: 0, gpu_memory_utilisation: 0.8,
+          selected_gpu_index: 0, selected_gpu_uuid: "gpu", gpus: [{ index: 0, name: "GPU", uuid: "gpu",
+            free_memory_bytes: 1_000_000, total_memory_bytes: 1_000_000 }] } }),
+    }));
+    assert.equal(response.status, upstreamSlow ? 503 : 200);
+    const result = await response.json();
+    if (upstreamSlow) {
+      assert.match(result.error, /retry claim/i);
+      assert.ok(Date.now() - started < 5_000, "slow Hub retry exceeded the request budget");
+    } else {
+      assert.deepEqual(result, { protocol_version: "volunteer-worker/v1", status: "no_work" });
+    }
+    assert.ok(metadataCalls >= 148);
+    assert.ok(maxInFlight <= 6);
+    assert.equal(configCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
+  }
+});
+
+for (const transientConfigError of [false, true]) test(
+  `claim ${transientConfigError ? "retries transient config failure" : "rejects model edited during metadata resolution"}`,
+  async () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = { ...process.env };
   process.env.VOLUNTEER_MARKER_SECRET = "marker-secret";
@@ -94,8 +170,10 @@ test("claim rejects an issue model edited during metadata resolution", async () 
     if (url.includes("/repos/EuroEval/EuroEval/assignees/")) return new Response(null, { status: 204 });
     if (url.includes("/repos/EuroEval/EuroEval/issues?")) return Response.json([issue]);
     if (url.includes("huggingface.co/api/models/org/model")) {
-      issue.title = "[MODEL EVALUATION REQUEST] org/edited";
-      issue.body = issue.body.replace("org/model", "org/edited");
+      if (!transientConfigError) {
+        issue.title = "[MODEL EVALUATION REQUEST] org/edited";
+        issue.body = issue.body.replace("org/model", "org/edited");
+      }
       return Response.json({ id: "org/model", sha: "a".repeat(40), private: false, gated: false,
         pipeline_tag: "fill-mask", siblings: [
         { rfilename: "model.safetensors", size: 100 }, { rfilename: "config.json", size: 10 },
@@ -103,7 +181,8 @@ test("claim rejects an issue model edited during metadata resolution", async () 
       ] });
     }
     if (url.includes(`/org/model/raw/${"a".repeat(40)}/config.json`)) {
-      return Response.json({ model_type: "bert", architectures: ["BertModel"] });
+      return transientConfigError ? new Response(null, { status: 429 }) :
+        Response.json({ model_type: "bert", architectures: ["BertModel"] });
     }
     if (url.endsWith(`/issues/${issueNumber}`) && requestMethod === "GET") return Response.json(issue);
     if (url.includes(`/issues/${issueNumber}`)) { githubMutations++; return Response.json(issue); }
@@ -118,8 +197,10 @@ test("claim rejects an issue model edited during metadata resolution", async () 
           gpus: [{ index: 0, name: "GPU", uuid: "gpu", free_memory_bytes: 1_000_000,
             total_memory_bytes: 1_000_000 }] } }),
     }));
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { protocol_version: "volunteer-worker/v1", status: "no_work" });
+    assert.equal(response.status, transientConfigError ? 503 : 200);
+    const result = await response.json();
+    if (transientConfigError) assert.match(result.error, /retry claim/i);
+    else assert.deepEqual(result, { protocol_version: "volunteer-worker/v1", status: "no_work" });
     assert.equal(githubMutations, 0);
     assert.equal(redisCommands.some((command) => command.some((item) =>
       typeof item === "string" && item.startsWith("euroeval:worker:lease"))), false);
@@ -129,7 +210,89 @@ test("claim rejects an issue model edited during metadata resolution", async () 
   }
 });
 
-test("claim resumes after expired contributor unassignment interruption", async () => {
+for (const stalledOperation of ["marker PATCH", "lease response"]) test(
+  `claim bounds a stalled ${stalledOperation} and cleans its Redis lease`, async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  Object.assign(process.env, { VOLUNTEER_MARKER_SECRET: "marker-secret",
+    VOLUNTEER_WORKER_IMAGE_DIGEST: "sha256:image", EUROEVAL_VERSION: "1.0.0",
+    VOLUNTEER_WORKER_VERSION: "1.0.0", UPSTASH_REDIS_REST_URL: "https://redis.test",
+    UPSTASH_REDIS_REST_TOKEN: "redis-token", GITHUB_TOKEN: "github-token",
+    VOLUNTEER_SCOPE_POLICY_JSON: JSON.stringify({ policy_version: "test-policy", policies: [{
+      euroeval_version: "1.0.0", model_type: "encoder", language: "da", language_group: "da",
+      allowed_identity_suffix_sets: [[JSON.stringify(["recovered", false, true])]],
+      task_groups: ["sequence_classification"], warnings: [],
+    }] }) });
+  const language = "Scandinavian languages (Danish, Faroese, Icelandic, Norwegian, Swedish)";
+  const issue = { number: issueNumber, title: "[MODEL EVALUATION REQUEST] org/model",
+    body: `### Model ID\n\norg/model\n\n- [x] ${language}\n`, state: "open", assignees: [] };
+  const credentialKey = `euroeval:worker:credential:${await sha256("credential")}`;
+  const values = new Map([[credentialKey, JSON.stringify({ contributor: "alice" })]]);
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input); const method = init.method || "GET";
+    if (url === "https://redis.test") {
+      const command = JSON.parse(init.body);
+      if (command[0] === "GET") return Response.json({ result: values.get(command[1]) || null });
+      if (command[0] === "INCR") return Response.json({ result: 1 });
+      if (command[0] === "EVAL" && command[1].includes("local issue=redis.call")) {
+        values.set(command[3], command[5]); values.set(command[4], command[5]);
+        if (stalledOperation === "lease response") {
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(resolve, 30_000);
+            init.signal?.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal.reason); }, { once: true });
+          });
+        }
+        return Response.json({ result: 1 });
+      }
+      if (command[0] === "EVAL" && command[1].includes("released=true")) {
+        values.delete(command[3]); values.delete(command[4]);
+        return Response.json({ result: 1 });
+      }
+      return Response.json({ result: command[0] === "SET" ? "OK" : 1 });
+    }
+    if (url.includes("/repos/EuroEval/EuroEval/issues?")) return Response.json([issue]);
+    if (url.includes("huggingface.co/api/models/org/model")) return Response.json({ id: "org/model",
+      sha: "a".repeat(40), private: false, gated: false, pipeline_tag: "fill-mask",
+      siblings: [{ rfilename: "model.safetensors", size: 100 }, { rfilename: "config.json", size: 10 }] });
+    if (url.includes(`/org/model/raw/${"a".repeat(40)}/config.json`)) {
+      return Response.json({ model_type: "bert", architectures: ["BertModel"] });
+    }
+    if (url.endsWith(`/issues/${issueNumber}`) && method === "GET") return Response.json(issue);
+    if (url.endsWith(`/issues/${issueNumber}`) && method === "PATCH") {
+      if (stalledOperation === "marker PATCH") {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 30_000);
+          init.signal?.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal.reason); }, { once: true });
+        });
+      }
+      issue.body = JSON.parse(init.body).body;
+      return Response.json(issue);
+    }
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  };
+  try {
+    const started = Date.now();
+    const response = await claim(new Request("https://euroeval.test/api/worker/claim", {
+      method: "POST", headers: { authorization: "Bearer credential", "content-type": "application/json" },
+      body: JSON.stringify({ protocol_version: "volunteer-worker/v1", worker_version: "1.0.0",
+        hardware: { architecture: "amd64", free_disk_bytes: 1_000_000, gpu_memory_utilisation: 0.8,
+          selected_gpu_index: 0, selected_gpu_uuid: "gpu", gpus: [{ index: 0, name: "GPU", uuid: "gpu",
+            free_memory_bytes: 1_000_000, total_memory_bytes: 1_000_000 }] } }),
+    }));
+    assert.equal(response.status, 503, JSON.stringify({ body: await response.clone().json(), keys: [...values.keys()] }));
+    assert.match((await response.json()).error, /retry claim/i);
+    assert.ok(Date.now() - started < 8_000, "stalled claim exceeded its cleanup budget");
+    assert.equal([...values.keys()].some((key) => key.startsWith("euroeval:worker:lease:")), false);
+    assert.equal(parseVolunteerMarker(issue.body), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
+  }
+});
+
+for (const lateCandidate of [false, true]) test(
+  `claim resumes expired ownership${lateCandidate ? " with a viable issue on page two" : " without assigning the issue"}`,
+  async () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = { ...process.env };
   process.env.VOLUNTEER_MARKER_SECRET = "marker-secret";
@@ -146,14 +309,35 @@ test("claim resumes after expired contributor unassignment interruption", async 
   }] });
   const language = "Scandinavian languages (Danish, Faroese, Icelandic, Norwegian, Swedish)";
   const expired = { ...lease, expires_at: "2020-01-01T00:00:00.000Z" };
+  const publicLease = { lease_id: "public-lease", language: "fr", worker: "public-worker",
+    contributor: "alice", expires_at: new Date(Date.now() + 120_000).toISOString(), ownership_mode: "public" };
   const signed = await signVolunteerMarker(issueNumber, {
     protocol_version: "volunteer-worker/v1", coordinator: "coordinator", submission: "active",
     leases: [{ lease_id: expired.lease_id, language: expired.language, worker: expired.worker,
-      contributor: expired.contributor, expires_at: expired.expires_at }],
+      contributor: expired.contributor, expires_at: expired.expires_at }, publicLease],
+    submissions: [{ submission_id: "public-submission", language: "fr", manifest_path: "manifest",
+      submitted_at: "2026-09-06T10:00:00Z", verified_contributor: "alice", result_count: 1,
+      status: "accepted", ownership_mode: "public" }],
   });
   const issue = { number: issueNumber, title: "[MODEL EVALUATION REQUEST] org/model",
     body: `### Model ID\n\norg/model\n\n- [x] ${language}\n\n${markerBody(signed)}`,
+    state: "open", assignees: [{ login: "alice" }], labels: [] };
+  const competing = await signVolunteerMarker(issueNumber + 1, {
+    protocol_version: "volunteer-worker/v1", coordinator: "coordinator", submission: "active",
+    leases: [{ lease_id: "competing-lease", language: "da", worker: "another-worker",
+      contributor: "another-user", expires_at: new Date(Date.now() + 120_000).toISOString(),
+      ownership_mode: "public" }],
+  });
+  const otherIssue = { number: issueNumber + 1, title: issue.title,
+    body: `### Model ID\n\norg/model\n\n- [x] ${language}\n\n<!-- euroeval-volunteer-worker:v1 ${JSON.stringify(competing)} -->`,
     state: "open", assignees: [], labels: [] };
+  const laterIssues = Array.from({ length: 146 }, (_, index) => ({
+    number: 1_000 + index, title: `[MODEL EVALUATION REQUEST] org/model-${index}`,
+    body: `### Model ID\n\norg/model-${index}\n\n- [x] ${language}`,
+    state: "open", assignees: [], labels: [],
+  }));
+  let competingClaim = true;
+  let metadataCalls = 0;
   const credentialKey = `euroeval:worker:credential:${await sha256("credential")}`;
   const leaseKey = `euroeval:worker:lease:${issueNumber}:da`;
   const values = new Map([[credentialKey, JSON.stringify({ contributor: "alice" })],
@@ -171,15 +355,24 @@ test("claim resumes after expired contributor unassignment interruption", async 
       return Response.json({ result: command[0] === "SET" ? "OK" : 1 });
     }
     if (url.includes("/repos/EuroEval/EuroEval/assignees/")) return new Response(null, { status: 204 });
-    if (url.includes("/repos/EuroEval/EuroEval/issues?")) return Response.json([issue]);
-    if (url.includes("huggingface.co/api/models/org/model")) return Response.json({
+    if (url.includes("/repos/EuroEval/EuroEval/issues?")) {
+      const page = Number(new URL(url).searchParams.get("page"));
+      const listed = competingClaim ? [issue, otherIssue, ...laterIssues] :
+        lateCandidate ? [...laterIssues, issue] : [issue, ...laterIssues];
+      return Response.json(listed.slice((page - 1) * 100, page * 100));
+    }
+    if (url.includes("huggingface.co/api/models/org/model")) {
+      metadataCalls++;
+      return Response.json({
       id: "org/model", sha: "a".repeat(40), private: false, gated: false,
       pipeline_tag: "fill-mask", siblings: [{ rfilename: "model.safetensors", size: 100 }],
-    });
+      });
+    }
     if (url.includes(`/org/model/raw/${"a".repeat(40)}/config.json`)) {
       return Response.json({ model_type: "bert", architectures: ["BertModel"] });
     }
     if (url.endsWith(`/issues/${issueNumber}`) && method === "GET") return Response.json(issue);
+    if (url.endsWith(`/issues/${issueNumber + 1}`) && method === "GET") return Response.json(otherIssue);
     if (url.endsWith(`/issues/${issueNumber}`) && method === "PATCH") {
       mutations.push("patch"); issue.body = JSON.parse(init.body).body; return Response.json(issue);
     }
@@ -192,19 +385,116 @@ test("claim resumes after expired contributor unassignment interruption", async 
     throw new Error(`Unexpected request: ${method} ${url}`);
   };
   try {
-    const response = await claim(new Request("https://euroeval.test/api/worker/claim", {
+    const claimRequest = () => new Request("https://euroeval.test/api/worker/claim", {
       method: "POST", headers: { authorization: "Bearer credential", "content-type": "application/json" },
       body: JSON.stringify({ protocol_version: "volunteer-worker/v1", worker_version: "1.0.0",
         hardware: { architecture: "amd64", free_disk_bytes: 1_000_000,
           gpu_memory_utilisation: 0.8, selected_gpu_index: 0, selected_gpu_uuid: "gpu",
           gpus: [{ index: 0, name: "GPU", uuid: "gpu", free_memory_bytes: 1_000_000,
             total_memory_bytes: 1_000_000 }] } }),
-    }));
+    });
+    const blocked = await claim(claimRequest());
+    const blockedBody = await blocked.json();
+    assert.equal(blockedBody.status, "no_work", JSON.stringify(blockedBody));
+    assert.deepEqual(mutations, ["unassign", "patch"]);
+    assert.ok(parseVolunteerMarker(issue.body).leases.every((item) => item.lease_id !== expired.lease_id));
+    competingClaim = false;
+    metadataCalls = 0;
+    const response = await claim(claimRequest());
     assert.equal(response.status, 200, await response.text());
-    assert.deepEqual(mutations, ["patch", "patch", "assign"]);
-    assert.deepEqual(issue.assignees, [{ login: "alice" }]);
-    assert.equal(parseVolunteerMarker(issue.body).leases.length, 1);
-    assert.notEqual(parseVolunteerMarker(issue.body).leases[0].lease_id, expired.lease_id);
+    if (lateCandidate) assert.ok(metadataCalls >= 147, `did not reach page-two issue (${metadataCalls} models)`);
+    else assert.ok(metadataCalls <= 7, `inspected ${metadataCalls} models before the first fit`);
+    assert.deepEqual(mutations, ["unassign", "patch", "patch"]);
+    assert.deepEqual(issue.assignees, []);
+    assert.equal(parseVolunteerMarker(issue.body).leases.length, 2);
+    assert.ok(parseVolunteerMarker(issue.body).leases.some((item) => item.lease_id === publicLease.lease_id));
+    assert.ok(parseVolunteerMarker(issue.body).leases.every((item) => item.lease_id !== expired.lease_id));
+    assert.equal(parseVolunteerMarker(issue.body).submissions[0].ownership_mode, "public");
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
+  }
+});
+
+for (const contention of ["global", "issue-only", "issue-later"]) test(
+  `claim retries on ${contention} mutex contention${contention === "issue-later" ? " and claims a later candidate" : ""}`,
+  async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  Object.assign(process.env, { VOLUNTEER_MARKER_SECRET: "marker-secret",
+    VOLUNTEER_WORKER_IMAGE_DIGEST: "sha256:image", EUROEVAL_VERSION: "1.0.0",
+    VOLUNTEER_WORKER_VERSION: "1.0.0", UPSTASH_REDIS_REST_URL: "https://redis.test",
+    UPSTASH_REDIS_REST_TOKEN: "redis-token", GITHUB_TOKEN: "github-token",
+    VOLUNTEER_SCOPE_POLICY_JSON: JSON.stringify({ policy_version: "test-policy", policies: [{
+      euroeval_version: "1.0.0", model_type: "encoder", language: "da", language_group: "da",
+      allowed_identity_suffix_sets: [[JSON.stringify(["race", false, true])]],
+      task_groups: ["sequence_classification"], warnings: [],
+    }] }) });
+  const language = "Scandinavian languages (Danish, Faroese, Icelandic, Norwegian, Swedish)";
+  const issueNumbers = contention === "issue-only" ? [12] : [12, 13];
+  const issues = issueNumbers.map((number) => ({ number, title: "[MODEL EVALUATION REQUEST] org/model",
+    body: `### Model ID\n\norg/model\n\n- [x] ${language}\n`, state: "open", assignees: [] }));
+  const credentialKey = `euroeval:worker:credential:${await sha256("credential")}`;
+  const values = new Map([[credentialKey, JSON.stringify({ contributor: "alice" })]]);
+  const mutations = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input); const method = init.method || "GET";
+    if (url === "https://redis.test") {
+      const command = JSON.parse(init.body);
+      if (command[0] === "GET") return Response.json({ result: values.get(command[1]) || null });
+      if (command[0] === "SMEMBERS") return Response.json({ result: [] });
+      if (command[0] === "INCR" || command[0] === "EXPIRE") return Response.json({ result: 1 });
+      if (command[0] === "SET" && command[1] === "euroeval:worker:mutex:9007199254740991" && contention === "global") {
+        return Response.json({ result: null });
+      }
+      if (command[0] === "SET" && command[1] === "euroeval:worker:mutex:12" && contention.startsWith("issue")) {
+        return Response.json({ result: null });
+      }
+      if (command[0] === "SET") { values.set(command[1], command[2]); return Response.json({ result: "OK" }); }
+      if (command[0] === "EVAL") {
+        if (String(command[1]).includes("released=true")) values.delete(command[3]);
+        else if (String(command[1]).includes("redis.call('SET'")) values.set(command[3], command[5]);
+        return Response.json({ result: 1 });
+      }
+    }
+    if (url.includes("/repos/EuroEval/EuroEval/assignees/")) return new Response(null, { status: 204 });
+    if (url.includes("/repos/EuroEval/EuroEval/issues?")) return Response.json(issues);
+    if (url.includes("huggingface.co/api/models/org/model")) return Response.json({ id: "org/model",
+      sha: "a".repeat(40), private: false, gated: false, pipeline_tag: "fill-mask",
+      siblings: [{ rfilename: "model.safetensors", size: 100 }, { rfilename: "config.json", size: 10 }] });
+    if (url.includes(`/org/model/raw/${"a".repeat(40)}/config.json`)) {
+      return Response.json({ model_type: "bert", architectures: ["BertModel"] });
+    }
+    const issue = issues.find((item) => url.endsWith(`/issues/${item.number}`));
+    if (issue && method === "GET") return Response.json(issue);
+    if (issue && method === "PATCH") {
+      mutations.push(issue.number); issue.body = JSON.parse(init.body).body; return Response.json(issue);
+    }
+    if (url === "https://redis.test") {
+      throw new Error(`Unexpected Redis command: ${JSON.parse(init.body)[0]}`);
+    }
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  };
+  try {
+    const makeRequest = () => new Request("https://euroeval.test/api/worker/claim", {
+      method: "POST", headers: { authorization: "Bearer credential", "content-type": "application/json" },
+      body: JSON.stringify({ protocol_version: "volunteer-worker/v1", worker_version: "1.0.0",
+        hardware: { architecture: "amd64", free_disk_bytes: 1_000_000,
+          gpu_memory_utilisation: 0.8, selected_gpu_index: 0, selected_gpu_uuid: "gpu",
+          gpus: [{ index: 0, name: "GPU", uuid: "gpu", free_memory_bytes: 1_000_000,
+            total_memory_bytes: 1_000_000 }] } }),
+    });
+    const response = await claim(makeRequest());
+    if (contention !== "issue-later") {
+      assert.equal(response.status, 503, await response.clone().text());
+      assert.deepEqual(await response.json(), { protocol_version: "volunteer-worker/v1",
+        error: "Claim is busy; retry claim.", code: "claim_busy" });
+      assert.deepEqual(mutations, []);
+    } else {
+      assert.equal(response.status, 200, await response.clone().text());
+      assert.equal((await response.json()).issue_number, 13);
+      assert.deepEqual(mutations, [13]);
+    }
   } finally {
     globalThis.fetch = originalFetch;
     process.env = originalEnv;
@@ -461,6 +751,54 @@ test("release re-signs while preserving history and other leases", async () => {
     assert.deepEqual(issue.assignees, [{ login: "bob" }]);
     assert.match(issue.body, /harmless comment/);
     assert.match(issue.body, /- \[x\] Greek/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
+  }
+});
+
+test("release unassigns legacy ownership despite matching public lease and submission", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  process.env.VOLUNTEER_MARKER_SECRET = "marker-secret";
+  process.env.UPSTASH_REDIS_REST_URL = "https://redis.test";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "redis-token";
+  process.env.GITHUB_TOKEN = "github-token";
+  const publicLease = { lease_id: "public-lease", language: "fr", worker: "public-worker",
+    contributor: "alice", expires_at: new Date(Date.now() + 120_000).toISOString(), ownership_mode: "public" };
+  const publicSubmission = { submission_id: "public-submission", language: "fr", manifest_path: "manifest",
+    submitted_at: "2026-09-06T10:00:00Z", verified_contributor: "alice", result_count: 1,
+    status: "accepted", ownership_mode: "public" };
+  const signed = await signVolunteerMarker(issueNumber, {
+    protocol_version: "volunteer-worker/v1", coordinator: "coordinator", submission: "submitted",
+    leases: [{ lease_id: lease.lease_id, language: lease.language, worker: lease.worker,
+      contributor: lease.contributor, expires_at: lease.expires_at }, publicLease],
+    submissions: [publicSubmission], completed_languages: [],
+  });
+  const issue = { number: issueNumber, body: markerBody(signed), state: "open", assignees: [{ login: "alice" }] };
+  const values = new Map();
+  values.set(`euroeval:worker:credential:${await sha256("credential")}`, JSON.stringify({ contributor: "alice" }));
+  values.set(`euroeval:worker:lease-id:${lease.lease_id}`, JSON.stringify(lease));
+  values.set(`euroeval:worker:lease:${issueNumber}:da`, JSON.stringify(lease));
+  const mutations = [];
+  const broker = mockBroker(issue, values);
+  globalThis.fetch = async (input, init = {}) => {
+    if (new URL(String(input)).origin === "https://api.github.com" && (init.method || "GET") !== "GET") {
+      mutations.push((init.method || "GET") + (String(input).includes("/assignees") ? ":assignee" : ":issue"));
+    }
+    return broker(input, init);
+  };
+  try {
+    const response = await release(new Request("https://euroeval.test/api/worker/release", {
+      method: "POST", headers: { authorization: "Bearer credential", "content-type": "application/json" },
+      body: JSON.stringify({ protocol_version: "volunteer-worker/v1", lease_id: lease.lease_id }),
+    }));
+    assert.equal(response.status, 200, await response.text());
+    assert.deepEqual(issue.assignees, []);
+    const released = parseVolunteerMarker(issue.body);
+    assert.deepEqual(released.leases, [publicLease]);
+    assert.deepEqual(released.submissions, [publicSubmission]);
+    assert.ok(mutations.includes("DELETE:assignee"));
   } finally {
     globalThis.fetch = originalFetch;
     process.env = originalEnv;

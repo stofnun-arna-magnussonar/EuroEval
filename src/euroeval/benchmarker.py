@@ -33,7 +33,12 @@ from .data_models import (
     get_package_version,
 )
 from .enums import Device, GenerativeType, InferenceBackend, ModelType, ShotMode
-from .exceptions import HuggingFaceHubDown, InvalidBenchmark, InvalidModel
+from .exceptions import (
+    HuggingFaceHubDown,
+    InvalidBenchmark,
+    InvalidModel,
+    NeedsExtraInstalled,
+)
 from .finetuning import finetune
 from .generation import generate
 from .logging_utils import adjust_logging_level, get_pbar, log, log_once
@@ -53,6 +58,33 @@ from .speed_benchmark import benchmark_speed
 from .tasks import LA, SPEED
 from .types import ShotModeRequest
 from .utils import enforce_reproducibility, get_hf_token, internet_connection_available
+
+_VERIFIED_MODEL_METADATA = {
+    "convaiinnovations/laya-multilingual": {
+        "commercially_licensed": True,
+        "open": True,
+        "trained_from_scratch": False,
+    },
+    "convaiinnovations/laya": {
+        "commercially_licensed": True,
+        "open": True,
+        "trained_from_scratch": False,
+    },
+}
+
+
+def _verified_model_metadata(model_id: str) -> dict[str, bool]:
+    """Return verified metadata for explicitly recognised model repositories.
+
+    Args:
+        model_id:
+            The exact Hugging Face repository ID, without revision or parameter.
+
+    Returns:
+        The known metadata fields, or an empty mapping for other models.
+    """
+    return _VERIFIED_MODEL_METADATA.get(model_id, {}).copy()
+
 
 if t.TYPE_CHECKING:
     from .benchmark_modules import BenchmarkModule
@@ -375,8 +407,9 @@ class Benchmarker:
                 Whether to clear the model cache after benchmarking each model. Defaults
                 to the value specified when initialising the benchmarker.
             evaluate_test_split:
-                Whether to evaluate the test split of the datasets. Defaults to the
-                value specified when initialising the benchmarker.
+                Whether to evaluate the test split of the datasets. Encoder models
+                always use test for final scores, while validation is used for early
+                stopping. Other model types use the configured value.
             few_shot:
                 The per-call shot policy. True and False select one concrete mode;
                 ``ShotMode.AUTO`` explicitly selects automatic planning. ``None``
@@ -554,6 +587,16 @@ class Benchmarker:
             if not datasets:
                 continue
 
+            # Encoders use validation for early stopping, but their final reported
+            # scores must always come from the published test split. Apply this
+            # model-specific override before result-cache identity is computed so a
+            # cached validation result cannot satisfy an encoder test evaluation.
+            model_benchmark_config = benchmark_config
+            if model_config.model_type is ModelType.ENCODER:
+                model_benchmark_config = replace(
+                    benchmark_config, evaluate_test_split=True
+                )
+
             loaded_model: "BenchmarkModule | None" = None
             model_finished = 0
             model_skipped = 0
@@ -566,7 +609,7 @@ class Benchmarker:
                     self._prepare_pending_benchmarks(
                         model_config=model_config,
                         datasets=datasets,
-                        benchmark_config=benchmark_config,
+                        benchmark_config=model_benchmark_config,
                         existing_results=existing_results,
                     )
                 )
@@ -584,7 +627,7 @@ class Benchmarker:
                     pending_benchmarks
                 ):
                     mode_config = replace(
-                        benchmark_config, few_shot=shot_mode is ShotMode.FEW_SHOT
+                        model_benchmark_config, few_shot=shot_mode is ShotMode.FEW_SHOT
                     )
                     self._update_benchmark_config_for_dataset(
                         dataset_config=dataset_config, benchmark_config=mode_config
@@ -788,6 +831,7 @@ class Benchmarker:
             num_model_parameters = reference_result.num_model_parameters
             max_sequence_length = reference_result.max_sequence_length
             vocabulary_size = reference_result.vocabulary_size
+        metadata = _verified_model_metadata(model_id=model_config.model_id)
         return BenchmarkResult(
             dataset=result_dataset,
             task=CANARY_RESULT_TASK,
@@ -804,6 +848,9 @@ class Benchmarker:
             generative=model_config.model_type is ModelType.GENERATIVE,
             model_type=model_config.model_type.value,
             inference_engine=model_config.inference_backend.value,
+            commercially_licensed=metadata.get("commercially_licensed"),
+            open=metadata.get("open"),
+            trained_from_scratch=metadata.get("trained_from_scratch"),
             generative_type=(
                 loaded_model.generative_type.value
                 if loaded_model is not None and loaded_model.generative_type is not None
@@ -1086,6 +1133,9 @@ class Benchmarker:
                         rng=rng,
                         dataset_config=dataset_config,
                         benchmark_config=benchmark_config,
+                        create_validation_split=(
+                            not model_config.model_type.uses_generation_pipeline
+                        ),
                     )
                     prepared_datasets = model.prepare_datasets(
                         datasets=bootstrapped_datasets, task=dataset_config.task
@@ -1131,6 +1181,7 @@ class Benchmarker:
                     dataset_config=dataset_config,
                     evaluate_test_split=benchmark_config.evaluate_test_split,
                 )
+                metadata = _verified_model_metadata(model_id=model_config.model_id)
                 record = BenchmarkResult(
                     dataset=dataset_config.name,
                     task=dataset_config.task.name,
@@ -1144,6 +1195,9 @@ class Benchmarker:
                     generative=model_config.model_type == ModelType.GENERATIVE,
                     model_type=model_config.model_type.value,
                     inference_engine=model_config.inference_backend.value,
+                    commercially_licensed=metadata.get("commercially_licensed"),
+                    open=metadata.get("open"),
+                    trained_from_scratch=metadata.get("trained_from_scratch"),
                     generative_type=(
                         model.generative_type.value
                         if model.generative_type is not None
@@ -1437,17 +1491,32 @@ class Benchmarker:
         )
         del dataset
 
-        if model_config.model_type is ModelType.ZERO_SHOT_CLASSIFIER:
-            from .benchmark_modules.zero_shot_classifier import (  # noqa: PLC0415
-                _resolve_checkpoint_path,
-            )
+        if model_config.inference_backend is InferenceBackend.TYPESAFE:
+            # Hosted models have no downloadable checkpoint; only data and metrics
+            # are cached in download-only mode.
+            pass
+        elif model_config.model_type is ModelType.ZERO_SHOT_CLASSIFIER:
+            if model_config.inference_backend is InferenceBackend.KEV:
+                from .benchmark_modules.kev import (  # noqa: PLC0415
+                    resolve_checkpoint_path,
+                )
 
-            _resolve_checkpoint_path(
-                model_id=model_config.model_id,
-                subfolder=model_config.param,
-                cache_dir=model_config.model_cache_dir,
-                token=get_hf_token(api_key=benchmark_config.api_key),
-            )
+                resolve_checkpoint_path(
+                    model_id=model_config.model_id,
+                    revision=model_config.revision,
+                    cache_dir=model_config.model_cache_dir,
+                    token=get_hf_token(api_key=benchmark_config.api_key),
+                )
+            else:
+                from .benchmark_modules.zero_shot_classifier import (  # noqa: PLC0415
+                    _resolve_checkpoint_path,
+                )
+
+                _resolve_checkpoint_path(
+                    model_id=model_config.model_id,
+                    cache_dir=model_config.model_cache_dir,
+                    token=get_hf_token(api_key=benchmark_config.api_key),
+                )
         # Skip download if the model is a local path
         elif not Path(model_config.model_id).exists():
             # Check if model is already cached before downloading
@@ -1505,16 +1574,27 @@ class Benchmarker:
     ) -> None:
         """Download model weights without loading virtual-task data."""
         if model_config.model_type is ModelType.ZERO_SHOT_CLASSIFIER:
-            from .benchmark_modules.zero_shot_classifier import (  # noqa: PLC0415
-                _resolve_checkpoint_path,
-            )
+            if model_config.inference_backend is InferenceBackend.KEV:
+                from .benchmark_modules.kev import (  # noqa: PLC0415
+                    resolve_checkpoint_path,
+                )
 
-            _resolve_checkpoint_path(
-                model_id=model_config.model_id,
-                subfolder=model_config.param,
-                cache_dir=model_config.model_cache_dir,
-                token=get_hf_token(api_key=benchmark_config.api_key),
-            )
+                resolve_checkpoint_path(
+                    model_id=model_config.model_id,
+                    revision=model_config.revision,
+                    cache_dir=model_config.model_cache_dir,
+                    token=get_hf_token(api_key=benchmark_config.api_key),
+                )
+            else:
+                from .benchmark_modules.zero_shot_classifier import (  # noqa: PLC0415
+                    _resolve_checkpoint_path,
+                )
+
+                _resolve_checkpoint_path(
+                    model_id=model_config.model_id,
+                    cache_dir=model_config.model_cache_dir,
+                    token=get_hf_token(api_key=benchmark_config.api_key),
+                )
             return
         if Path(model_config.model_id).exists():
             log_once(
@@ -1557,6 +1637,7 @@ class Benchmarker:
             A list of model configurations.
         """
         configs: list["ModelConfig"] = []
+        missing_extras: list[NeedsExtraInstalled] = []
         for model_id in get_pbar(
             iterable=model_ids,
             desc="Fetching model configurations",
@@ -1568,8 +1649,14 @@ class Benchmarker:
                         model_id=model_id, benchmark_config=benchmark_config
                     )
                 )
+            except NeedsExtraInstalled as e:
+                missing_extras.append(e)
             except InvalidModel as e:
                 log(e.message, level=logging.ERROR)
+        if not configs and missing_extras:
+            raise missing_extras[0]
+        for error in missing_extras:
+            log(error.message, level=logging.ERROR)
         return configs
 
     def _generate_summary_message(

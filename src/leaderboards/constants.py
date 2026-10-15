@@ -115,6 +115,15 @@ CORE_MODELS_CONFIG: Path = PACKAGE_DIR / "core_models.yaml"
 # results despite no URL being found, so we don't re-prompt every run.
 MODELS_WITHOUT_URLS_CACHE: Path = PACKAGE_DIR / "models_without_urls_cache.yaml"
 
+# Public list of (model, dataset) results that are left out of a model's aggregated
+# score and rank, e.g. because the model was trained on the dataset (see
+# `invalid_results.py`).
+INVALID_RESULTS_CONFIG: Path = PACKAGE_DIR / "invalid_results.yaml"
+
+# Appended to a dataset score on the leaderboards when the (model, dataset) result
+# is listed in `INVALID_RESULTS_CONFIG`.
+INVALID_SCORE_MARKER = "(invalid)"
+
 # Persistent cache of per-dataset split sizes (keyed by Hugging Face source),
 # used to turn raw failure counts into proportions on the leaderboard. Split
 # sizes effectively never change; if a dataset is ever resized, delete its
@@ -217,20 +226,22 @@ LEADERBOARD_TASKS: list[str] = [
     "common-sense-reasoning",
     "simplification",
     "european-values",
+    "hallucination",
     "instruction-following",
     "tool-calling",
     "logical-reasoning",
     "multiple-choice-stereotype-bias",
 ]
 
-# The three leaderboard categories that every model is ranked within. The
-# "chat" variant scores every task and only ranks instruction-tuned/
-# reasoning models; "generative" scores all tasks except the instruct-
-# exclusive ones; "all_models" only scores NLU tasks so non-generative models
-# can compete.
+# The leaderboard categories that every model is ranked within. Chat ranks
+# instruction-tuned/reasoning models across all tasks; generative excludes
+# instruct-exclusive tasks; understanding focuses on non-orthogonal NLU and
+# multiple-choice classification; all_models lets encoders, generative models,
+# and zero-shot classifiers compete on sequence and multiple-choice tasks.
 LEADERBOARD_CATEGORIES: tuple[LeaderboardCategory, ...] = (
     LeaderboardCategory.CHAT,
     LeaderboardCategory.GENERATIVE,
+    LeaderboardCategory.UNDERSTANDING,
     LeaderboardCategory.ALL_MODELS,
 )
 MINIMUM_NUMBER_OF_RANKED_ENTRIES: int = 100
@@ -266,6 +277,7 @@ API_MODEL_PATTERNS: list[re.Pattern] = [
     re.compile(r"(openai/)?gpt-[456789].*"),
     re.compile(r"(anthropic/)?claude.*"),
     re.compile(r"(xai/)?grok.*"),
+    re.compile(r"typesafe/jev-\d+\.\d+\.\d+"),
 ]
 
 # Models matching these patterns are excluded from the core-model list

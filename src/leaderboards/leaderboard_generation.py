@@ -15,8 +15,14 @@ import pandas as pd
 from euroeval.constants import ORTHOGONAL_TASKS
 
 from .bootstrap_cis import bootstrap_confidence_intervals, bootstrap_rank_scores
-from .constants import NUM_BOOTSTRAPS, OUTPUT_DIR, VARIANT_SUFFIX_RE
+from .constants import (
+    INVALID_SCORE_MARKER,
+    NUM_BOOTSTRAPS,
+    OUTPUT_DIR,
+    VARIANT_SUFFIX_RE,
+)
 from .enums import LeaderboardCategory
+from .invalid_results import invalid_datasets_by_model, load_invalid_results
 from .link_generation import generate_task_link
 from .records import drop_val_duplicates, plain_model_id, strip_note_item
 from .result_loading import load_raw_results
@@ -83,6 +89,9 @@ def generate_leaderboard(
         str, dict[str, list[tuple[list[float], float, float]]]
     ] = group_results_by_model(results=results)
     global_model_results = drop_val_duplicates(model_results=global_model_results)
+    invalid_datasets = invalid_datasets_by_model(
+        invalid_results=load_invalid_results(), model_datasets=global_model_results
+    )
     model_results = {
         model_id: {
             dataset: scores
@@ -109,6 +118,7 @@ def generate_leaderboard(
         leaderboard_configs=configs,
         include_dataset_columns=include_dataset_columns,
         language_rank_cache=language_rank_cache,
+        invalid_datasets=invalid_datasets,
     )
 
     for category, df_pair in zip(categories, df_pairs):
@@ -228,6 +238,41 @@ def generate_leaderboard(
                         )  # type: ignore[attr-defined]
                         if has_new_scores and model_id not in new_records:
                             new_records.append(model_id)
+
+            # A model entering or leaving a ranking, e.g. through an invalid result,
+            # only changes the rank-score columns, which the comparison above leaves
+            # out, and multilingual leaderboards have no dataset columns. Compare
+            # which models have a score in the overall and per-language rank columns.
+            def ranked_models(frame: pd.DataFrame, column: str) -> set[str]:
+                """Return the models with a rank score in a column.
+
+                Args:
+                    frame:
+                        The leaderboard.
+                    column:
+                        The rank-score column.
+
+                Returns:
+                    The models whose score in the column is not a placeholder.
+                """
+                return {
+                    str(model)
+                    for model, score in zip(frame["Model"], frame[column])
+                    if not pd.isna(score)
+                    and str(score).strip() not in {"-", "N/A", "?", ""}
+                }
+
+            for column in sorted(rank_score_columns):
+                if column not in df.columns or column not in old_df.columns:
+                    continue
+                changed_models = ranked_models(frame=old_df, column=column) ^ (
+                    ranked_models(frame=df, column=column)
+                )
+                new_records += [
+                    model
+                    for model in sorted(changed_models)
+                    if model not in new_records
+                ]
         else:
             new_records = df.Model.tolist()
 
@@ -333,10 +378,13 @@ def _create_leaderboard_headers(
     processed_tasks_per_language: dict[str, set[str]] = {}
     seen_version_col = False
     for id_, col in enumerate(df.columns):
-        if (task := col.replace(" ", "-").lower()) in ORTHOGONAL_TASKS:
+        if (
+            task := col.replace(" ", "-").lower().removesuffix("-rate")
+        ) in ORTHOGONAL_TASKS:
             top_header.append("")
+            task_page = "hallucination-detection" if task == "hallucination" else task
             second_header.append(
-                f'<a href="https://euroeval.com/tasks/{task}">{col}</a>'
+                f'<a href="https://euroeval.com/tasks/{task_page}">{col}</a>'
             )
 
         # Replace dataset columns with task links in the first header, and dataset links
@@ -395,6 +443,7 @@ def _generate_dataframe(
     include_dataset_columns: bool,
     language_rank_cache: dict[tuple[str, str, tuple[str, ...], tuple[str, ...]], dict]
     | None = None,
+    invalid_datasets: dict[str, set[str]] | None = None,
 ) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
     """Generate DataFrames from the model results.
 
@@ -411,6 +460,9 @@ def _generate_dataframe(
             Whether to include dataset columns in the DataFrame.
         language_rank_cache (optional):
             Shared cache for monolingual rank-score confidence intervals.
+        invalid_datasets (optional):
+            Model ID to the datasets on which its result is invalid. These results
+            are shown, marked as invalid, but left out of aggregated scores and ranks.
 
     Returns:
         A list of pairs (df, df_simplified), where df is the full leaderboard DataFrame
@@ -419,6 +471,17 @@ def _generate_dataframe(
     if model_results == {}:
         logger.error("No model results found, skipping leaderboard generation.")
         return []
+
+    if invalid_datasets is None:
+        invalid_datasets = {}
+    ranked_model_results = {
+        model_id: {
+            dataset: scores
+            for dataset, scores in results.items()
+            if dataset not in invalid_datasets.get(model_id, set())
+        }
+        for model_id, results in model_results.items()
+    }
 
     category_to_datasets, category_to_orthogonal_datasets = (
         _build_category_dataset_maps(categories, leaderboard_configs)
@@ -432,12 +495,13 @@ def _generate_dataframe(
             ranks,
             all_standard_ranks,
         ) = _compute_eligible_models_and_ranks(
-            model_results=model_results,
+            model_results=ranked_model_results,
             category=category,
             category_to_datasets=category_to_datasets,
             category_to_orthogonal_datasets=category_to_orthogonal_datasets,
             leaderboard_configs=leaderboard_configs,
             language_rank_cache=language_rank_cache,
+            metadata_dict=metadata_dict,
         )
 
         orthogonal_scores_by_plain = _collect_orthogonal_scores(
@@ -469,6 +533,8 @@ def _generate_dataframe(
                 generative_type is None or zero_shot_classifier
             ):
                 continue
+            if category == LeaderboardCategory.UNDERSTANDING and zero_shot_classifier:
+                continue
             model_values = _build_model_row_data(
                 model_id=model_id,
                 results=results,
@@ -482,6 +548,7 @@ def _generate_dataframe(
                 category_to_orthogonal_datasets=category_to_orthogonal_datasets,
                 orthogonal_scores_by_plain=orthogonal_scores_by_plain,
                 metadata_dict=metadata_dict,
+                invalid_datasets=invalid_datasets.get(model_id, set()),
             )
             for key, value in model_values.items():
                 data_dict[key].append(value)
@@ -660,8 +727,9 @@ def _build_model_row_data(
     leaderboard_configs: dict[str, dict[str, list[str]]],
     category_to_datasets: dict[str, list[str]],
     category_to_orthogonal_datasets: dict[str, dict[str, str]],
-    orthogonal_scores_by_plain: dict[str, dict[str, float]],
+    orthogonal_scores_by_plain: dict[str, dict[str, tuple[float, float | None]]],
     metadata_dict: dict[str, dict],
+    invalid_datasets: set[str],
 ) -> dict[str, t.Any]:
     """Build the data dictionary entry for a single model row.
 
@@ -690,6 +758,9 @@ def _build_model_row_data(
             Orthogonal scores by plain model id.
         metadata_dict:
             The metadata dictionary.
+        invalid_datasets:
+            The datasets on which this model's result is invalid. Their scores, and
+            the orthogonal task scores they contribute to, are marked as invalid.
 
     Returns:
         Dictionary with all values for this model row.
@@ -731,13 +802,15 @@ def _build_model_row_data(
         for task in category_to_orthogonal_datasets[category].values()
     }
 
-    plain_id = plain_model_id(model_id)
-    orthogonal_scores = defaultdict(list)
-    for dataset, orthogonal_main_score in orthogonal_scores_by_plain.get(
-        plain_id, {}
+    orthogonal_scores: dict[str, list[tuple[float, float | None]]] = defaultdict(list)
+    invalid_orthogonal_tasks: set[str] = set()
+    for dataset, score_and_std_err in orthogonal_scores_by_plain.get(
+        plain_model_id(model_id), {}
     ).items():
         orthogonal_task = category_to_orthogonal_datasets[category][dataset]
-        orthogonal_scores[orthogonal_task].append(orthogonal_main_score)
+        orthogonal_scores[orthogonal_task].append(score_and_std_err)
+        if dataset in invalid_datasets:
+            invalid_orthogonal_tasks.add(orthogonal_task)
 
     total_results = {}
     for dataset in category_to_datasets[category]:
@@ -760,12 +833,32 @@ def _build_model_row_data(
             )
         else:
             score_str = "-"
+        if dataset in invalid_datasets and score_str != "-":
+            score_str = f"{score_str} {INVALID_SCORE_MARKER}"
         total_results[dataset] = score_str
 
-    orthogonal_task_scores = {
-        task: np.mean(score_list).item() if len(score_list) > 0 else float("nan")
-        for task, score_list in orthogonal_scores.items()
-    }
+    orthogonal_task_scores: dict[str, float | str] = {}
+    for task, dataset_scores in orthogonal_scores.items():
+        if not dataset_scores:
+            orthogonal_task_scores[task] = float("nan")
+            continue
+        point = np.mean([score for score, _ in dataset_scores]).item()
+        uncertainties = [std_err for _, std_err in dataset_scores]
+        if all(std_err is not None for std_err in uncertainties):
+            sum_squared_errors = sum(
+                std_err**2 for std_err in uncertainties if std_err is not None
+            )
+            halfwidth = 1.96 * math.sqrt(sum_squared_errors) / len(dataset_scores)
+            orthogonal_task_scores[task] = f"{point:,.2f} ± {halfwidth:,.2f}"
+        else:
+            orthogonal_task_scores[task] = (
+                f"{point:,.2f}" if task == "european-values" else point
+            )
+        if task in invalid_orthogonal_tasks:
+            task_score = orthogonal_task_scores[task]
+            if not isinstance(task_score, str):
+                task_score = f"{task_score:,.2f}"
+            orthogonal_task_scores[task] = f"{task_score} {INVALID_SCORE_MARKER}"
 
     metadata = {
         key: value
@@ -835,7 +928,7 @@ def _collect_orthogonal_scores(
     model_results: dict[str, dict[str, list[tuple[list[float], float, float]]]],
     category: str,
     category_to_orthogonal_datasets: dict[str, dict[str, str]],
-) -> dict[str, dict[str, float]]:
+) -> dict[str, dict[str, tuple[float, float | None]]]:
     """Collect orthogonal scores keyed by plain model id.
 
     Args:
@@ -847,18 +940,30 @@ def _collect_orthogonal_scores(
             Category to orthogonal datasets mapping.
 
     Returns:
-        Dictionary mapping plain model ids to orthogonal scores.
+        Dictionary mapping model ids and datasets to scores and usable standard errors.
     """
-    orthogonal_scores_by_plain: dict[str, dict[str, float]] = defaultdict(dict)
+    orthogonal_scores_by_model: dict[str, dict[str, tuple[float, float | None]]] = (
+        defaultdict(dict)
+    )
     for other_model_id, other_results in model_results.items():
-        other_plain_id = plain_model_id(other_model_id)
         for dataset in category_to_orthogonal_datasets[category]:
             if dataset not in other_results:
                 continue
-            main_score = other_results[dataset][0][1]
-            if not math.isnan(main_score):
-                orthogonal_scores_by_plain[other_plain_id][dataset] = main_score
-    return orthogonal_scores_by_plain
+            raw_scores, main_score, std_err = other_results[dataset][0]
+            if not math.isfinite(main_score):
+                continue
+            usable_std_err = (
+                std_err
+                if len([score for score in raw_scores if math.isfinite(score)]) >= 2
+                and math.isfinite(std_err)
+                and std_err >= 0
+                else None
+            )
+            orthogonal_scores_by_model[plain_model_id(other_model_id)][dataset] = (
+                main_score,
+                usable_std_err,
+            )
+    return orthogonal_scores_by_model
 
 
 def _compute_eligible_models_and_ranks(
@@ -869,6 +974,7 @@ def _compute_eligible_models_and_ranks(
     leaderboard_configs: dict[str, dict[str, list[str]]],
     language_rank_cache: dict[tuple[str, str, tuple[str, ...], tuple[str, ...]], dict]
     | None = None,
+    metadata_dict: dict[str, dict] | None = None,
 ) -> "tuple[dict[str, dict[str, list[tuple[list[float], float, float]]]], dict[str, list[str]], dict, dict]":  # noqa: E501
     """Compute eligible models and bootstrap ranks for a category.
 
@@ -894,6 +1000,9 @@ def _compute_eligible_models_and_ranks(
             The leaderboard configurations.
         language_rank_cache (optional):
             Shared cache for monolingual rank-score confidence intervals.
+        metadata_dict (optional):
+            Model metadata used to exclude zero-shot classifiers from the
+            understanding leaderboard.
 
     Returns:
         Tuple of (eligible_model_results, language_to_required_datasets,
@@ -906,11 +1015,30 @@ def _compute_eligible_models_and_ranks(
         for ds in sorted(category_to_datasets[category])
         if ds not in category_to_orthogonal_datasets[category]
     ]
+
     # Sort for deterministic iteration.
+    def is_eligible_understanding_model(model_id: str) -> bool:
+        """Check the category's model-type restriction for a model.
+
+        Args:
+            model_id:
+                The model identifier.
+
+        Returns:
+            Whether the model is permitted in this category's rank pool.
+        """
+        return not (
+            category == LeaderboardCategory.UNDERSTANDING
+            and metadata_dict is not None
+            and metadata_dict.get(model_id, {}).get("model_type")
+            == "zero_shot_classifier"
+        )
+
     eligible_model_results = {
         mid: model_results[mid]
         for mid in sorted(model_results.keys())
         if all(ds in model_results[mid] for ds in required_datasets)
+        and is_eligible_understanding_model(mid)
     }
 
     language_to_required_datasets = {
@@ -963,6 +1091,7 @@ def _compute_eligible_models_and_ranks(
                 mid: model_results[mid]
                 for mid in sorted(model_results.keys())
                 if all(ds in model_results[mid] for ds in lang_required)
+                and is_eligible_understanding_model(mid)
             }
             cache_key = _language_rank_cache_key(
                 language=language,
@@ -1088,7 +1217,11 @@ def _create_simplified_and_rename(
         | {"mean_rank_score": "Rank score"}
         | {rank_col: rank_col.title() for rank_col in rank_cols[2:]}
         | {
-            orthogonal_task.replace("-", "_"): orthogonal_task.replace("-", " ").title()
+            orthogonal_task.replace("-", "_"): (
+                "Hallucination Rate"
+                if orthogonal_task == "hallucination"
+                else orthogonal_task.replace("-", " ").title()
+            )
             for orthogonal_task in category_to_orthogonal_datasets[category].values()
         }
     )

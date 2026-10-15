@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import replace
 from pathlib import Path
 from shutil import rmtree
@@ -25,8 +25,9 @@ from euroeval.data_models import (
     ModelConfig,
     Task,
 )
-from euroeval.enums import InferenceBackend, ModelType, ShotMode
-from euroeval.exceptions import HuggingFaceHubDown
+from euroeval.enums import InferenceBackend, ModelType, ShotMode, TaskGroup
+from euroeval.exceptions import HuggingFaceHubDown, NeedsExtraInstalled
+from euroeval.languages import DANISH
 from euroeval.result_cache import get_record
 from euroeval.tasks import CONTAMINATION_DETECTION, NER, SENT
 
@@ -601,6 +602,86 @@ def test_benchmark_openai(
     assert all(isinstance(result, BenchmarkResult) for result in benchmark_result)
 
 
+@pytest.mark.parametrize(
+    ("backend", "expected_dataset_names"),
+    [
+        (
+            InferenceBackend.GLINER,
+            ["sent-dataset", "multiple-choice-dataset", "canary-dataset"],
+        ),
+        (
+            InferenceBackend.LAYA,
+            ["sent-dataset", "multiple-choice-dataset", "canary-dataset"],
+        ),
+        (
+            InferenceBackend.TYPESAFE,
+            ["sent-dataset", "multiple-choice-dataset", "canary-dataset"],
+        ),
+    ],
+)
+def test_benchmark_plan_includes_multiple_choice_for_gliner(
+    benchmarker: Benchmarker,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    backend: InferenceBackend,
+    expected_dataset_names: list[str],
+) -> None:
+    """The public benchmark plan includes GLiNER multiple-choice tasks."""
+    classifier_config = replace(
+        model_config,
+        model_type=ModelType.ZERO_SHOT_CLASSIFIER,
+        inference_backend=backend,
+    )
+    sequence_dataset = DatasetConfig(
+        name="sent-dataset",
+        pretty_name="Sentiment dataset",
+        source="dataset_id",
+        task=SENT,
+        languages=[DANISH],
+    )
+    multiple_choice_dataset = DatasetConfig(
+        name="multiple-choice-dataset",
+        pretty_name="Multiple-choice dataset",
+        source="dataset_id",
+        task=replace(SENT, task_group=TaskGroup.MULTIPLE_CHOICE_CLASSIFICATION),
+        languages=[DANISH],
+    )
+    canary_dataset = DatasetConfig(
+        name="canary-dataset",
+        pretty_name="Contamination canary",
+        source="dataset_id",
+        task=CONTAMINATION_DETECTION,
+        languages=[DANISH],
+    )
+    planned_datasets: list[DatasetConfig] = []
+    monkeypatch.setattr(
+        benchmarker,
+        "_fetch_model_configs",
+        lambda _model_ids, _benchmark_config: [classifier_config],
+    )
+
+    def capture_plan(
+        *,
+        datasets: Sequence[DatasetConfig],
+        model_config: ModelConfig,
+        benchmark_config: BenchmarkConfig,
+        existing_results: Sequence[BenchmarkResult],
+    ) -> tuple[None, list[tuple[ShotMode, DatasetConfig]], list[BenchmarkResult], None]:
+        planned_datasets.extend(datasets)
+        return None, [], [], None
+
+    monkeypatch.setattr(benchmarker, "_prepare_pending_benchmarks", capture_plan)
+
+    benchmarker.benchmark(
+        model="fastino/GLiNER2.5-Decide",
+        dataset=[sequence_dataset, multiple_choice_dataset, canary_dataset],
+        save_results=False,
+        progress_bar=False,
+    )
+
+    assert [dataset.name for dataset in planned_datasets] == expected_dataset_names
+
+
 def test_benchmark_result_includes_model_release_date(
     monkeypatch: pytest.MonkeyPatch,
     model_config: ModelConfig,
@@ -608,7 +689,11 @@ def test_benchmark_result_includes_model_release_date(
     benchmark_config: BenchmarkConfig,
 ) -> None:
     """A completed evaluation copies model release metadata into its result."""
-    dated_config = replace(model_config, release_date="2024-02-03")
+    dated_config = replace(
+        model_config,
+        model_id="convaiinnovations/laya-multilingual",
+        release_date="2024-02-03",
+    )
     model = MagicMock()
     model.num_params = 100
     model.model_max_length = 512
@@ -636,6 +721,9 @@ def test_benchmark_result_includes_model_release_date(
 
     assert isinstance(result, BenchmarkResult)
     assert result.release_date == "2024-02-03"
+    assert result.commercially_licensed is True
+    assert result.open is True
+    assert result.trained_from_scratch is False
 
 
 def test_benchmark_results_is_a_list(benchmarker: Benchmarker) -> None:
@@ -859,6 +947,151 @@ def test_encoder_canary_standalone_uses_supported_metadata_task(
     assert load_model_mock.call_args.kwargs["dataset_config"].task != (
         CONTAMINATION_DETECTION
     )
+
+
+def test_encoder_final_scoring_receives_test_split_config(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    dataset_config: DatasetConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A validation request still sends test-split config to the final scorer."""
+    encoder_config = replace(model_config, model_type=ModelType.ENCODER)
+    config = replace(
+        benchmark_config, datasets=[dataset_config], evaluate_test_split=False
+    )
+    scoring_configs: list[BenchmarkConfig] = []
+    monkeypatch.setattr(
+        benchmarker, "_build_benchmark_config", lambda **_kwargs: config
+    )
+    monkeypatch.setattr(
+        benchmarker, "_fetch_model_configs", lambda *_args: [encoder_config]
+    )
+    monkeypatch.setattr(
+        benchmarker,
+        "_create_model_dataset_mapping",
+        lambda model_configs, datasets: {model: datasets for model in model_configs},
+    )
+    monkeypatch.setattr(
+        benchmarker,
+        "_prepare_pending_benchmarks",
+        lambda **_kwargs: (
+            MagicMock(),
+            [(ShotMode.ZERO_SHOT, dataset_config)],
+            [],
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        benchmarker,
+        "_benchmark_single",
+        lambda **kwargs: scoring_configs.append(kwargs["benchmark_config"]),
+    )
+    monkeypatch.setattr(
+        benchmarker, "_handle_benchmark_result", lambda **kwargs: (1, 0, 0, False)
+    )
+
+    benchmarker.benchmark(model="encoder-model", evaluate_test_split=False)
+
+    assert len(scoring_configs) == 1
+    assert scoring_configs[0].evaluate_test_split is True
+
+
+@pytest.mark.parametrize(
+    "requested_test_split",
+    [None, False, True],
+    ids=["default-validation-request", "explicit-validation-request", "test-request"],
+)
+def test_encoder_uses_test_split_in_public_benchmark_flow(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    dataset_config: DatasetConfig,
+    model_config: ModelConfig,
+    requested_test_split: bool | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Encoder split override reaches cache planning even for val requests."""
+    encoder_config = replace(model_config, model_type=ModelType.ENCODER)
+    config = replace(benchmark_config, datasets=[dataset_config])
+    observed: list[BenchmarkConfig] = []
+
+    monkeypatch.setattr(
+        benchmarker,
+        "_build_benchmark_config",
+        lambda **kwargs: replace(
+            config,
+            evaluate_test_split=(
+                config.evaluate_test_split
+                if kwargs.get("evaluate_test_split") is None
+                else kwargs["evaluate_test_split"]
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        benchmarker, "_fetch_model_configs", lambda *_args: [encoder_config]
+    )
+    monkeypatch.setattr(
+        benchmarker,
+        "_create_model_dataset_mapping",
+        lambda model_configs, datasets: {model: datasets for model in model_configs},
+    )
+
+    def record_cache_identity(
+        model_config: ModelConfig,
+        benchmark_plan: Sequence[tuple[ShotMode, DatasetConfig]],
+        benchmark_config: BenchmarkConfig,
+        benchmark_results: Sequence[BenchmarkResult],
+    ) -> tuple[list[tuple[ShotMode, DatasetConfig]], list[BenchmarkResult]]:
+        _ = model_config, benchmark_plan, benchmark_results
+        observed.append(benchmark_config)
+        return [], []
+
+    monkeypatch.setattr(
+        "euroeval.benchmarker.filter_existing_benchmarks", record_cache_identity
+    )
+    if requested_test_split is None:
+        benchmarker.benchmark(model="encoder-model")
+    else:
+        benchmarker.benchmark(
+            model="encoder-model", evaluate_test_split=requested_test_split
+        )
+
+    assert observed
+    assert all(config.evaluate_test_split is True for config in observed)
+
+
+def test_fetch_model_configs_keeps_valid_models_when_extra_is_missing(
+    benchmarker: Benchmarker,
+    model_config: ModelConfig,
+    dataset_config: DatasetConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing optional extra does not prevent other selected models running."""
+    observed: list[ModelConfig] = []
+
+    def get_config(*, model_id: str, benchmark_config: BenchmarkConfig) -> ModelConfig:
+        if model_id == "gliner":
+            raise NeedsExtraInstalled(extra="gliner")
+        return model_config
+
+    def capture_plan(
+        *,
+        model_config: ModelConfig,
+        datasets: Sequence[DatasetConfig],
+        benchmark_config: BenchmarkConfig,
+        existing_results: Sequence[BenchmarkResult],
+    ) -> tuple[None, list[tuple[ShotMode, DatasetConfig]], list[BenchmarkResult], None]:
+        observed.append(model_config)
+        return None, [], [], None
+
+    monkeypatch.setattr("euroeval.benchmarker.get_model_config", get_config)
+    monkeypatch.setattr(benchmarker, "_prepare_pending_benchmarks", capture_plan)
+    benchmarker.benchmark(
+        model=["gliner", "valid"], dataset=dataset_config, save_results=False
+    )
+
+    assert observed == [model_config]
 
 
 @pytest.mark.parametrize(
@@ -1094,16 +1327,14 @@ def test_get_record(
     assert benchmarked == expected
 
 
-@pytest.mark.parametrize("param", [None, "multilingual"])
-def test_laya_download_only_resolves_requested_checkpoint(
+def test_laya_download_only_resolves_root_checkpoint(
     benchmarker: Benchmarker,
     benchmark_config: BenchmarkConfig,
     model_config: ModelConfig,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    param: str | None,
 ) -> None:
-    """Laya downloads use the parameter-aware resolver, not cache globbing."""
+    """Laya downloads resolve only the root checkpoint, not cache globbing."""
     model_cache_dir = tmp_path / "model-cache"
     (model_cache_dir / "other-variant").mkdir(parents=True)
     (model_cache_dir / "other-variant" / "model.safetensors").touch()
@@ -1111,14 +1342,17 @@ def test_laya_download_only_resolves_requested_checkpoint(
         model_config,
         model_type=ModelType.ZERO_SHOT_CLASSIFIER,
         model_cache_dir=str(model_cache_dir),
-        param=param,
+        param=None,
     )
     resolver_mock = MagicMock()
+    resolved_token = "resolved-token"
     monkeypatch.setattr(
         "euroeval.benchmark_modules.zero_shot_classifier._resolve_checkpoint_path",
         resolver_mock,
     )
-    monkeypatch.setattr("euroeval.benchmarker.get_hf_token", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "euroeval.benchmarker.get_hf_token", lambda **kwargs: resolved_token
+    )
 
     benchmarker._download_model_only(
         model_config=zero_shot_config, benchmark_config=benchmark_config
@@ -1126,10 +1360,56 @@ def test_laya_download_only_resolves_requested_checkpoint(
 
     resolver_mock.assert_called_once_with(
         model_id=zero_shot_config.model_id,
-        subfolder=param,
         cache_dir=str(model_cache_dir),
-        token=None,
+        token=resolved_token,
     )
+
+
+def test_mixed_models_keep_non_encoder_split_setting(
+    benchmarker: Benchmarker,
+    benchmark_config: BenchmarkConfig,
+    dataset_config: DatasetConfig,
+    model_config: ModelConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The encoder override does not change generative or classifier split choices."""
+    configs = [
+        replace(model_config, model_id="encoder", model_type=ModelType.ENCODER),
+        replace(model_config, model_id="generative", model_type=ModelType.GENERATIVE),
+        replace(
+            model_config,
+            model_id="classifier",
+            model_type=ModelType.ZERO_SHOT_CLASSIFIER,
+        ),
+    ]
+    config = replace(
+        benchmark_config, datasets=[dataset_config], evaluate_test_split=False
+    )
+    observed: dict[str, bool] = {}
+    monkeypatch.setattr(
+        benchmarker, "_build_benchmark_config", lambda **_kwargs: config
+    )
+    monkeypatch.setattr(benchmarker, "_fetch_model_configs", lambda *_args: configs)
+    monkeypatch.setattr(
+        benchmarker,
+        "_create_model_dataset_mapping",
+        lambda model_configs, datasets: {model: datasets for model in model_configs},
+    )
+
+    def record_cache_plan(
+        model_config: ModelConfig,
+        datasets: Sequence[DatasetConfig],
+        benchmark_config: BenchmarkConfig,
+        existing_results: Sequence[BenchmarkResult],
+    ) -> tuple[None, list[tuple[ShotMode, DatasetConfig]], list[BenchmarkResult], None]:
+        _ = datasets, existing_results
+        observed[model_config.model_id] = benchmark_config.evaluate_test_split
+        return None, [], [], None
+
+    monkeypatch.setattr(benchmarker, "_prepare_pending_benchmarks", record_cache_plan)
+    benchmarker.benchmark(model=[config.model_id for config in configs])
+
+    assert observed == {"encoder": True, "generative": False, "classifier": False}
 
 
 def test_zero_shot_canary_standalone_reuses_loaded_model_metadata(
@@ -1150,7 +1430,7 @@ def test_zero_shot_canary_standalone_reuses_loaded_model_metadata(
     )
     zero_shot_config = replace(
         model_config,
-        model_id="laya-model",
+        model_id="convaiinnovations/laya",
         revision="main",
         fresh=False,
         model_type=ModelType.ZERO_SHOT_CLASSIFIER,
@@ -1173,6 +1453,9 @@ def test_zero_shot_canary_standalone_reuses_loaded_model_metadata(
 
     assert len(results) == 1
     assert results[0].task == CONTAMINATION_DETECTION.name
+    assert results[0].commercially_licensed is True
+    assert results[0].open is True
+    assert results[0].trained_from_scratch is False
     assert load_model_mock.call_count == 1
     assert load_model_mock.call_args.kwargs["dataset_config"].task != (
         CONTAMINATION_DETECTION

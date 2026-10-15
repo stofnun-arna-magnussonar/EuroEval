@@ -7,6 +7,7 @@ import {
   watch,
 } from "vue";
 import type { LeaderboardTable } from "@/leaderboard";
+import { splitScoreNote } from "@/leaderboard";
 import { matchesQuery } from "@/filter";
 
 type XAxis = "parameters" | "releaseDate";
@@ -76,6 +77,7 @@ const META_KEYS: readonly string[] = [
   "vocabulary",
   "context",
   "european values",
+  "hallucination rate",
   "commercial",
   "merge",
   "open-weight",
@@ -92,15 +94,25 @@ const formatCompact = (n: number): string => {
 };
 
 const COMPACT_KEYS = new Set(["parameters", "vocabulary", "context"]);
-const PERCENT_KEYS = new Set(["european values"]);
+const PERCENT_KEYS = new Set(["european values", "hallucination rate"]);
 
 const formatMetaValue = (key: string, cell: { text: string; sortKey: number | string }): string => {
   if (cell.text === "-" || cell.text === "?" || cell.text === "") return "—";
   if (COMPACT_KEYS.has(key) && typeof cell.sortKey === "number" && Number.isFinite(cell.sortKey)) {
     return formatCompact(cell.sortKey);
   }
-  if (PERCENT_KEYS.has(key) && typeof cell.sortKey === "number" && Number.isFinite(cell.sortKey)) {
-    return `${Math.round(cell.sortKey)}%`;
+  if (PERCENT_KEYS.has(key)) {
+    const { value, note } = splitScoreNote(cell.text);
+    const suffix = note ? ` ${note}` : "";
+    const interval = value.match(
+      /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*±\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/,
+    );
+    if (interval) return `${interval[1]}% ± ${interval[2]}%${suffix}`;
+    if (typeof cell.sortKey === "number" && Number.isFinite(cell.sortKey)) {
+      return key === "hallucination rate"
+        ? `${cell.sortKey.toFixed(2)}%${suffix}`
+        : `${Math.round(cell.sortKey)}%${suffix}`;
+    }
   }
   return cell.text;
 };

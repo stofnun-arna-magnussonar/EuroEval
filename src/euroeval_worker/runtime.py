@@ -152,7 +152,7 @@ class Worker:
         state: StateStore,
         evaluator: Evaluator | None = None,
         gpu_memory_utilisation: float = 0.8,
-        hardware_factory: c.Callable[[], HardwareReport] = discover_hardware,
+        hardware_factory: c.Callable[[], HardwareReport] | None = None,
     ) -> None:
         """Initialise a worker.
 
@@ -174,7 +174,7 @@ class Worker:
         self.evaluator = evaluator or EuroEvalEvaluator(
             cache_dir=state.directory, gpu_memory_utilisation=gpu_memory_utilisation
         )
-        self.hardware_factory = hardware_factory
+        self.hardware_factory = hardware_factory or discover_hardware
         self.last_submission_id: str | None = None
         self._credential = ""
         self._login = ""
@@ -211,7 +211,7 @@ class Worker:
                 )
                 self.state.archive_active()
                 active = None
-            discovered = self.hardware_factory()
+            discovered = self._discover_hardware()
             if active is not None:
                 selected = _gpu_for_lease(discovered.gpus, active.lease)
                 hardware = self._hardware_with_selected(discovered, selected)
@@ -283,6 +283,16 @@ class Worker:
             return new_credential, self.client.claim(
                 credential=new_credential, hardware=hardware
             )
+
+    def _discover_hardware(self) -> HardwareReport:
+        """Discover hardware against the worker's writable state filesystem.
+
+        Returns:
+            A report measured on the state and model-cache filesystem.
+        """
+        if self.hardware_factory is discover_hardware:
+            return discover_hardware(state_dir=self.state.directory)
+        return self.hardware_factory()
 
     def _hardware_with_selected(
         self, hardware: HardwareReport, selected: Gpu
@@ -371,11 +381,49 @@ class Worker:
                     )
                     self.state.archive_active()
                     raise
+                try:
+                    fresh_hardware = self._discover_hardware()
+                    fresh_gpu = _gpu_for_lease(fresh_hardware.gpus, lease)
+                    if (
+                        fresh_gpu.total_memory_bytes <= 0
+                        or fresh_gpu.free_memory_bytes <= 0
+                    ):
+                        raise NoGpuError("leased GPU has no usable memory measurement")
+                    effective_utilisation = min(
+                        self.gpu_memory_utilisation,
+                        self.gpu_memory_utilisation
+                        * fresh_gpu.free_memory_bytes
+                        / fresh_gpu.total_memory_bytes,
+                    )
+                except Exception as error:  # noqa: BLE001 - measurement must fail closed
+                    self.client.release(
+                        credential=self._credential,
+                        lease_id=lease.lease_id,
+                        reason="gpu_unavailable",
+                    )
+                    self.state.archive_active()
+                    raise NoGpuError(
+                        f"cannot safely evaluate on the leased GPU: {error}"
+                    ) from error
                 heartbeat.start()
                 output = self.state.directory / "results" / f"{lease.lease_id}.jsonl"
                 corpus_path = self._canary_corpus_path(lease=lease)
                 with _pin_gpu(selected_gpu), _pin_canary_corpus(corpus_path):
-                    evaluated = self.evaluator.evaluate(lease=lease, output_path=output)
+                    evaluate_parameters = inspect.signature(
+                        self.evaluator.evaluate
+                    ).parameters
+                    evaluate_kwargs: dict[str, object] = {
+                        "lease": lease,
+                        "output_path": output,
+                    }
+                    if "gpu_memory_utilisation" in evaluate_parameters:
+                        evaluate_kwargs["gpu_memory_utilisation"] = (
+                            effective_utilisation
+                        )
+                    evaluate = t.cast(
+                        c.Callable[..., list[EEERecord]], self.evaluator.evaluate
+                    )
+                    evaluated = evaluate(**evaluate_kwargs)
                 heartbeat.check()
                 try:
                     records = self._durable_records(active=active, evaluated=evaluated)
