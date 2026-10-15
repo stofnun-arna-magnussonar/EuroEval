@@ -19,6 +19,13 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   (`icestabs2`), based on the official Icelandic spelling rules from the Árni Magnússon
   Institute for Icelandic Studies.
 
+### Changed
+
+- The unofficial Icelandic `ice-linguistic-is` dataset is now evaluated zero-shot only,
+  using only its test split, via the new generative-only
+  `linguistic-acceptability-zero-shot` task. The dataset has been rebuilt to include
+  the benchmark's word sense items, and now consists of 962 test samples.
+
 ## [v18.2.0] - 2026-09-29
 
 ### Added

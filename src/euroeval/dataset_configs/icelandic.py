@@ -10,6 +10,7 @@ from ..tasks import (
     INSTRUCTION_FOLLOWING,
     KNOW,
     LA,
+    LA_ZERO_SHOT,
     LOGIC,
     MCRC,
     NER,
@@ -192,21 +193,22 @@ ICE_LINGUISTIC_CONFIG = DatasetConfig(
 )
 
 # Unlike `ice-linguistic`, this keeps the benchmark's own Icelandic prompts verbatim
-# instead of extracting the bare sentence. Each item exists in two polarities ("er
-# setningin málfræðilega rétt?" / "... röng?"), which the benchmark authors added to
-# control for yes/no response bias; extracting the sentence collapses the two into
-# duplicate rows and discards that control. Passing the prompt through keeps them as
-# distinct items with opposite correct answers, so a model that always answers "já"
-# scores an MCC near zero. Splits are assigned per phenomenon group, so minimal-pair
-# partners never straddle the train/test boundary.
+# instead of extracting the bare sentence. The grammaticality and compound-word items
+# exist in two polarities ("er setningin málfræðilega rétt?" / "... röng?"), which the
+# benchmark authors added to control for yes/no response bias; extracting the sentence
+# collapses the two into duplicate rows and discards that control. Passing the prompt
+# through keeps them as distinct items with opposite correct answers, so a model that
+# always answers "já" scores an MCC near zero. The dataset only has a test split, since
+# it is evaluated zero-shot only, matching the paper.
 ICE_LINGUISTIC_IS_CONFIG = DatasetConfig(
     name="ice-linguistic-is",
     pretty_name="IceLinguistic-is",
     source="arnastofnun/ice-linguistic-is",
-    task=LA,
+    task=LA_ZERO_SHOT,
     languages=[ICELANDIC],
     unofficial=True,
-    val_split="validation",
+    train_split=None,
+    val_split=None,
     labels=["já", "nei"],
     prompt_label_mapping="auto",
     prompt_prefix="Eftirfarandi eru spurningar um íslenska málfræði ásamt svörum.",

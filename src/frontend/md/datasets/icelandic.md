@@ -376,29 +376,28 @@ in three respects.
 
 First, it uses the Icelandic-prompt edition of the benchmark and passes each item's
 prompt through verbatim, rather than extracting the bare sentence and wrapping it in
-EuroEval's generic linguistic-acceptability template. Every item in the source exists in
-two polarities — *"Er eftirfarandi setning málfræðilega **rétt** á íslensku?"* and *"...
-**röng** ...?"* — which the benchmark authors added specifically to control for yes/no
-response bias (paper §3.1). Extracting the sentence collapses the two into duplicate rows
-and discards that control; keeping the prompt makes them distinct items with opposite
-correct answers, so a model that always answers `já` scores an MCC near zero.
+EuroEval's generic linguistic-acceptability template. The grammaticality and
+compound-word items in the source exist in two polarities — *"Er eftirfarandi setning
+málfræðilega **rétt** á íslensku?"* and *"... **röng** ...?"* — which the benchmark
+authors added specifically to control for yes/no response bias (paper §3.1). Extracting
+the sentence collapses the two into duplicate rows and discards that control; keeping
+the prompt makes them distinct items with opposite correct answers, so a model that
+always answers `já` scores an MCC near zero.
 
-Second, splits are assigned per phenomenon group rather than per row. A group holds every
-variant of one phenomenon instance: both members of a minimal pair together with both
-polarities of each. Splitting by row scatters near-identical sentences across train and
-test, leaking test answers into the few-shot pool.
+Second, it is evaluated zero-shot only, as in the paper. Variants of the same phenomenon
+instance, such as both members of a minimal pair and both polarities of each, are
+near-identical, so any few-shot pool drawn from the same items would leak test answers.
 
-Third, it covers both yes/no methods of the benchmark — sentence grammaticality (532
-items) and compound-noun well-formedness (280 items) — rather than a length-filtered
-subset of the former.
+Third, it covers all the yes/no methods of the benchmark — sentence grammaticality (532
+items), compound-noun well-formedness (280 items) and word sense (150 items) — rather
+than a length-filtered subset of the first.
 
-Of the 1,160 items in the source, the 812 with `já`/`nei` answers are used; the remainder
-are free-text methods (fill-in-the-blank, fragment answering, question answering, word
-sense) that cannot be scored as a classification task. We use a 140 / 98 / 574 split for
-training, validation and testing, respectively, with every split balanced between the two
-labels and all 20 phenomenon families represented in the test split.
+Of the 1,160 items in the source, the 962 with `já`/`nei` answers are used; the remainder
+are free-text methods (fill-in-the-blank, fragment answering and question answering) that
+cannot be scored as a classification task. All 962 items are used for testing, of which
+456 have the answer `já` and 506 the answer `nei`.
 
-Here are a few examples from the training split:
+Here are a few examples from the test split:
 
 ```json
 {
@@ -421,10 +420,17 @@ Here are a few examples from the training split:
 }
 ```
 
+```json
+{
+  "text": "Er orðið sem er merkt með <i></i> í eftirfarandi tveimur setningum á íslensku sömu merkingar?\n\n 1) Krakkarnir <i>lituðu</i> allir í litabókina. 2) Krakkarnir <i>lituðu</i> allir í leikskólanum. \n\nSvaraðu aðeins með einu orði, já eða nei.",
+  "label": "já"
+}
+```
+
 When evaluating generative models, we use the following setup (see the
 [methodology](/methodology) for more information on how these are used):
 
-- Number of few-shot examples: 12
+- Number of few-shot examples: 0
 - Prefix prompt:
 
   ```text
@@ -449,8 +455,6 @@ When evaluating generative models, we use the following setup (see the
 - Label mapping:
   - `já` ➡️ `já`
   - `nei` ➡️ `nei`
-
-Note that the paper evaluates zero-shot; add `--zero-shot` to reproduce that condition.
 
 You can evaluate this dataset directly as follows:
 

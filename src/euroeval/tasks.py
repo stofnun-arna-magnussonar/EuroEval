@@ -233,6 +233,20 @@ TRANSLATION = Task(
 )
 
 
+LA_ZERO_SHOT = Task(
+    name="linguistic-acceptability-zero-shot",
+    task_group=TaskGroup.SEQUENCE_CLASSIFICATION,
+    template_dict=LA_TEMPLATES,
+    metrics=[m.mcc_metric, m.macro_f1_metric],
+    default_num_few_shot_examples=0,
+    default_max_generated_tokens=NUM_GENERATION_TOKENS_FOR_CLASSIFICATION,
+    default_labels=["correct", "incorrect"],
+    default_allowed_model_types=[ModelType.GENERATIVE],
+    requires_zero_shot=True,
+    uses_logprobs=True,
+)
+
+
 # Tasks for instruction-tuned models only
 
 INSTRUCTION_FOLLOWING = Task(
