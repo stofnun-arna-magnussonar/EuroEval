@@ -2343,3 +2343,89 @@ You can evaluate this dataset directly as follows:
 ```bash
 euroeval --model <model-id> --dataset icestabs2
 ```
+
+## Classification
+
+### Unofficial: IceLocPrep
+
+This dataset tests the choice between the Icelandic locative prepositions *í* and *á*
+before place names (e.g. *í Afganistan* but *á Akranesi*), which is largely a lexical
+property of each place name rather than something that follows from general rules. Each
+sample is a sentence where the preposition has been replaced by a blank (`_`), and the
+model has to choose the correct preposition. The place names are Icelandic toponyms (479
+samples), countries (243) and other foreign toponyms (23), and each sample also has a
+`predictable` flag (588 `True`, 157 `False`).
+
+The dataset consists of 745 samples, all of which are used for testing, as the dataset is
+only used for zero-shot evaluation. Of these, 403 have the answer *í* and 342 the answer
+*á*.
+
+Here are a few examples from the test split:
+
+```json
+{
+  "num": "1",
+  "query": "Hún býr _ Afganistan.",
+  "gold": "í",
+  "correct": "Hún býr í Afganistan.",
+  "category": "country",
+  "predictable": "True"
+}
+```
+
+```json
+{
+  "num": "2",
+  "query": "Hann er _ Akranesi.",
+  "gold": "á",
+  "correct": "Hann er á Akranesi.",
+  "category": "icelandic_toponym",
+  "predictable": "False"
+}
+```
+
+```json
+{
+  "num": "29",
+  "query": "Hún vinnur _ Bahamaeyjum.",
+  "gold": "á",
+  "correct": "Hún vinnur á Bahamaeyjum.",
+  "category": "country",
+  "predictable": "True"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 0
+- Prefix prompt:
+
+  ```text
+  Eftirfarandi eru setningar þar sem forsetninguna í eða á vantar í eyðuna (_), ásamt réttri forsetningu.
+  ```
+
+- Base prompt template:
+
+  ```text
+  Setning: {text}
+  Forsetning: {label}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  Setning: {text}
+
+  Hvor forsetningin, í eða á, á að standa í eyðunni (_) í setningunni hér að ofan? Svaraðu aðeins með einu orði, í eða á.
+  ```
+
+- Label mapping:
+  - `í` ➡️ `í`
+  - `á` ➡️ `á`
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset icelocprep
+```

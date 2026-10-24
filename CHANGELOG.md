@@ -18,6 +18,10 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 - Added the unofficial Icelandic spelling standardisation dataset IceStaBS2
   (`icestabs2`), based on the official Icelandic spelling rules from the Árni Magnússon
   Institute for Icelandic Studies.
+- Added the generative-only `classification-zero-shot` task, a variant of the generic
+  `classification` task for datasets that are only meant to be evaluated zero-shot.
+- Added the unofficial Icelandic dataset IceLocPrep (`icelocprep`), in which the model
+  has to choose between the locative prepositions "í" and "á" before place names.
 
 ### Changed
 
@@ -25,6 +29,12 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   using only its test split, via the new generative-only
   `linguistic-acceptability-zero-shot` task. The dataset has been rebuilt to include
   the benchmark's word sense items, and now consists of 962 test samples.
+
+### Fixed
+
+- API models for which LiteLLM rejects the `response_format` parameter, such as some
+  Together AI models, were skipped entirely on classification datasets. The parameter is
+  now dropped instead, as it already was when the provider itself rejected it.
 
 ## [v18.3.0] - 2026-10-08
 

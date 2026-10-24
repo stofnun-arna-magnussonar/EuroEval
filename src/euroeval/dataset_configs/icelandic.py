@@ -3,6 +3,7 @@
 from ..data_models import DatasetConfig, TranslationDatasetConfig
 from ..languages import ENGLISH, ICELANDIC
 from ..tasks import (
+    CLASSIFICATION_ZERO_SHOT,
     COMMON_SENSE,
     EUROPEAN_VALUES,
     GED,
@@ -225,6 +226,29 @@ ICE_LINGUISTIC_IS_CONFIG = DatasetConfig(
     prompt_prefix="Eftirfarandi eru spurningar um íslenska málfræði ásamt svörum.",
     prompt_template="{text}\nSvar: {label}",
     instruction_prompt="{text}",
+)
+
+# Each sentence has a blank where the locative preposition "í" or "á" belongs before a
+# place name, which is largely a lexical property of the place name in Icelandic. The
+# dataset only has a test split, as it is meant for zero-shot evaluation only.
+ICELOCPREP_CONFIG = DatasetConfig(
+    name="icelocprep",
+    pretty_name="IceLocPrep",
+    source="arnastofnun/icelocprep",
+    task=CLASSIFICATION_ZERO_SHOT,
+    languages=[ICELANDIC],
+    unofficial=True,
+    train_split=None,
+    val_split=None,
+    input_column="query",
+    target_column="gold",
+    labels=["í", "á"],
+    prompt_label_mapping="auto",
+    prompt_prefix="Eftirfarandi eru setningar þar sem forsetninguna í eða á vantar í "
+    "eyðuna (_), ásamt réttri forsetningu.",
+    prompt_template="Setning: {text}\nForsetning: {label}",
+    instruction_prompt="Setning: {text}\n\nHvor forsetningin, í eða á, á að standa í "
+    "eyðunni (_) í setningunni hér að ofan? Svaraðu aðeins með einu orði, í eða á.",
 )
 
 ICELANDIC_QA_CONFIG = DatasetConfig(

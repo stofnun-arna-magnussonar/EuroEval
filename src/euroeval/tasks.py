@@ -394,6 +394,19 @@ TEXT_CLASSIFICATION = Task(
     uses_logprobs=True,
 )
 
+CLASSIFICATION_ZERO_SHOT = Task(
+    name="classification-zero-shot",
+    task_group=TaskGroup.SEQUENCE_CLASSIFICATION,
+    template_dict=CLASSIFICATION_TEMPLATES,
+    metrics=[m.mcc_metric, m.macro_f1_metric],
+    default_num_few_shot_examples=0,
+    default_max_generated_tokens=NUM_GENERATION_TOKENS_FOR_CLASSIFICATION,
+    default_labels=None,
+    default_allowed_model_types=[ModelType.GENERATIVE],
+    requires_zero_shot=True,
+    uses_logprobs=True,
+)
+
 TOKEN_CLASSIFICATION = Task(
     name="token-classification",
     task_group=TaskGroup.TOKEN_CLASSIFICATION,
