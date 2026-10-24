@@ -251,6 +251,7 @@ MODEL_RELEASE_DATE_MAPPING = {
     r"(anthropic/)?claude-mythos-preview": "2026-04-07",
     r"(anthropic/)?claude-opus-4-8": "2026-05-28",
     r"(anthropic/)?claude-(?:fable|mythos)-5": "2026-06-09",
+    r"(anthropic/)?claude-fable-5-1": "2026-09-01",
     r"(anthropic/)?claude-sonnet-5": "2026-06-30",
     r"(anthropic/)?claude-opus-5": "2026-07-24",
     r"(anthropic/)?claude-(?:fable|mythos)-5-1": "2026-09-01",
@@ -1214,6 +1215,9 @@ class LiteLLMModel(BenchmarkModule):
             r"does not support parameters: \[.*'temperature'.*\]"
         )
         seed_pattern = re.compile(r"does not support parameters: \[.*'seed'.*\]")
+        response_format_pattern = re.compile(
+            r"does not support parameters: \[.*'response_format'.*\]"
+        )
         thinking_budget_pattern = re.compile(
             r"the thinking budget [0-9]+ is invalid. please choose a value between "
             r"[0-9]+ and ([0-9]+)\."
@@ -1469,8 +1473,13 @@ class LiteLLMModel(BenchmarkModule):
             "must contain the word 'json'",
             "the model returned empty outputs",
         ]
-        if any(msg.lower() in error_msg for msg in response_format_messages) or any(
-            msg.lower() in error_msg for msg in request_local_response_format_messages
+        if (
+            any(msg.lower() in error_msg for msg in response_format_messages)
+            or any(
+                msg.lower() in error_msg
+                for msg in request_local_response_format_messages
+            )
+            or response_format_pattern.search(string=error_msg)
         ):
             log_once(
                 f"The model {model_id!r} does not support the `response_format` "

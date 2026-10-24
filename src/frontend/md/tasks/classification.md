@@ -10,6 +10,10 @@ classification tasks.
 When evaluating generative models, we allow the model to generate up to 10 tokens on
 this task.
 
+There is also a `classification-zero-shot` variant of this task, for datasets that are
+only meant to be evaluated zero-shot. It is identical apart from always being evaluated
+zero-shot, and only generative models can be evaluated on it.
+
 ## 📊 Metrics
 
 The primary metric is [Matthews correlation

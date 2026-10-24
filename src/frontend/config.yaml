@@ -80,6 +80,7 @@ sections:
       - { path: tasks/sentiment-classification.md, title: Sentiment Classification }
       - { path: tasks/simplification.md, title: Simplification }
       - { path: tasks/speed.md, title: Speed }
+      - { path: tasks/spelling-standardisation.md, title: Spelling Standardisation }
       - { path: tasks/summarization.md, title: Summarization }
       - { path: tasks/tool-calling.md, title: Tool calling }
       - { path: tasks/translation.md, title: Translation }

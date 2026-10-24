@@ -2,6 +2,7 @@
 
 from .bias import *  # noqa: F403
 from .bpc import *  # noqa: F403
+from .containment import *  # noqa: F403
 from .huggingface import *  # noqa: F403
 from .ifeval import *  # noqa: F403
 from .llm_as_a_judge import *  # noqa: F403
