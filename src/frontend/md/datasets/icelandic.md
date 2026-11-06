@@ -462,6 +462,69 @@ You can evaluate this dataset directly as follows:
 euroeval --model <model-id> --dataset ice-linguistic-is
 ```
 
+### Unofficial: IceBLiMP-MCQ
+
+This dataset tests knowledge of Icelandic grammar through pairs of sentences. Each sample
+shows two sentences, and the model has to answer whether only the first, only the second,
+neither or both of them are grammatical Icelandic. All samples concern the case of
+subjects (e.g. *Sýningunni lauk* but not *\*Sýningin lauk*). Half of the samples are
+minimal pairs where exactly one of the sentences is grammatical, while the other half
+pair two grammatical sentences or two ungrammatical sentences. All four answers are equally
+common.
+
+Here are a couple of examples from the test split:
+
+```json
+{
+  "id": "1",
+  "prompt": "Hér eru tvær setningar á íslensku:\n\n1. Sýningunni lauk ekki fyrr en allir voru orðnir verulega þreyttir.\n2. Sýningin lauk ekki fyrr en allir voru orðnir verulega þreyttir.\n\nSpurt er um málfræði setninganna, ekki hvort efni þeirra sé satt.\nHvaða fullyrðing á við?\n\na. Aðeins fyrri setningin er málfræðilega rétt íslenska.\nb. Aðeins seinni setningin er málfræðilega rétt íslenska.\nc. Hvorug setningin er málfræðilega rétt íslenska.\nd. Báðar setningarnar eru málfræðilega rétt íslenska.\n\nSvaraðu *einungis* með bókstafnum a, b, c eða d.",
+  "answer": "a",
+  "category": "subject_case",
+  "kind": "original_pair"
+}
+```
+
+```json
+{
+  "id": "5",
+  "prompt": "Hér eru tvær setningar á íslensku:\n\n1. Fönninni kyngdi hreinlega niður alla aðventuna.\n2. Sendiherrafrúnni barst bréfið örlítið of seint.\n\nSpurt er um málfræði setninganna, ekki hvort efni þeirra sé satt.\nHvaða fullyrðing á við?\n\na. Aðeins fyrri setningin er málfræðilega rétt íslenska.\nb. Aðeins seinni setningin er málfræðilega rétt íslenska.\nc. Hvorug setningin er málfræðilega rétt íslenska.\nd. Báðar setningarnar eru málfræðilega rétt íslenska.\n\nSvaraðu *einungis* með bókstafnum a, b, c eða d.",
+  "answer": "d",
+  "category": "subject_case",
+  "kind": "cross_group_good_good"
+}
+```
+
+When evaluating generative models, we use the following setup (see the
+[methodology](/methodology) for more information on how these are used):
+
+- Number of few-shot examples: 0
+- Prefix prompt:
+
+  ```text
+  Eftirfarandi eru fjölvalsspurningar um íslenska málfræði ásamt svörum.
+  ```
+
+- Base prompt template:
+
+  ```text
+  {text}
+  Svar: {label}
+  ```
+
+- Instruction-tuned prompt template:
+
+  ```text
+  {text}
+  ```
+
+  I.e., the benchmark's own prompt is used directly, with no additional instruction.
+
+You can evaluate this dataset directly as follows:
+
+```bash
+euroeval --model <model-id> --dataset iceblimp-mcq
+```
+
 ## Reading Comprehension
 
 ### NQiI

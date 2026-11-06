@@ -749,6 +749,10 @@ We have included three convenience tasks to make it easier to set up custom data
   `tokens` is a list of tokens/words in the text, and `labels` is a list of the
   corresponding labels for each token (so the two lists have the same length).
 
+`TEXT_CLASSIFICATION` also has a variant for datasets that should only be evaluated
+zero-shot, `CLASSIFICATION_ZERO_SHOT`. It is identical apart from always being evaluated
+zero-shot, and only generative models can be evaluated on it.
+
 On top of these three convenience tasks, there are of course also the tasks that we use
 in the official benchmark, which you can use if you want to use one of these tasks with
 your own bespoke dataset:

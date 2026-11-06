@@ -22,6 +22,8 @@ project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   `classification` task for datasets that are only meant to be evaluated zero-shot.
 - Added the unofficial Icelandic dataset IceLocPrep (`icelocprep`), in which the model
   has to choose between the locative prepositions "í" and "á" before place names.
+- Added the unofficial Icelandic grammar dataset IceBLiMP-MCQ (`iceblimp-mcq`), in which
+  the model has to judge which of two sentences, if any, are grammatical.
 
 ### Changed
 

@@ -251,6 +251,30 @@ ICELOCPREP_CONFIG = DatasetConfig(
     "eyðunni (_) í setningunni hér að ofan? Svaraðu aðeins með einu orði, í eða á.",
 )
 
+# Each item shows two sentences, and the model has to say whether only the first, only
+# the second, neither or both are grammatical. The four options are the same in every
+# item, so it is evaluated as classification, with per-class scores via macro-F1. The
+# benchmark's own Icelandic prompts are passed through verbatim. The dataset only has a
+# test split, as it is meant for zero-shot evaluation only.
+ICEBLIMP_MCQ_CONFIG = DatasetConfig(
+    name="iceblimp-mcq",
+    pretty_name="IceBLiMP-MCQ",
+    source="arnastofnun/iceblimp-mcq",
+    task=CLASSIFICATION_ZERO_SHOT,
+    languages=[ICELANDIC],
+    unofficial=True,
+    train_split=None,
+    val_split=None,
+    input_column="prompt",
+    target_column="answer",
+    labels=["a", "b", "c", "d"],
+    prompt_label_mapping="auto",
+    prompt_prefix="Eftirfarandi eru fjölvalsspurningar um íslenska málfræði ásamt "
+    "svörum.",
+    prompt_template="{text}\nSvar: {label}",
+    instruction_prompt="{text}",
+)
+
 ICELANDIC_QA_CONFIG = DatasetConfig(
     name="icelandic-qa",
     pretty_name="Icelandic QA",
